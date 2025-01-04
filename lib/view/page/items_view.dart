@@ -1,13 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:things_map/core/entity/item.dart';
 import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/core/init_setup.dart';
 import 'package:things_map/cubit/items_view_cubit.dart';
 import 'package:things_map/view/widgets/image_tile.dart';
-import 'package:path/path.dart' as p;
 import 'package:things_map/view/widgets/item_info_text_field.dart';
 import 'package:things_map/view/widgets/list_heading.dart';
 
@@ -69,27 +65,39 @@ class _ItemsViewState extends State<ItemsView> {
                     key: _formKey,
                     child: ListView(
                       children: [
+                        ListTile(
+                          title: Text(
+                            switch (state) {
+                              ItemsViewNonTopLevel(:final niceParentPath) =>
+                                niceParentPath,
+                              _ => ""
+                            },
+                          ),
+                          leading: Icon(Icons.arrow_back),
+                          enabled: (state is ItemsViewNonTopLevel),
+                          onTap: () {
+                            switch (state) {
+                              case ItemsViewNonTopLevel(:final currentItem):
+                                context.read<ItemsViewCubit>().goToItemWithId(
+                                      id: currentItem.parentId,
+                                      straightToEditMode: false,
+                                    );
+                              default:
+                                break;
+                            }
+                          },
+                        ),
+                        Divider(),
                         ...switch (state) {
                           ItemsViewTopLevel() => [
                               ListHeading("Top Level"),
                             ],
                           ItemsViewNonTopLevel(
                             :final currentItem,
-                            :final niceParentPath,
                             :final isEditMode,
                             :final currentItemImagePaths,
                           ) =>
                             [
-                              ListTile(
-                                title: Text(
-                                  niceParentPath,
-                                ),
-                                leading: Icon(Icons.arrow_back),
-                                onTap: () {
-                                  context.read<ItemsViewCubit>().goBack();
-                                },
-                              ),
-                              Divider(),
                               ExpansionTile(
                                 // childrenPadding: EdgeInsets.zero,
                                 key: Key("Item:${currentItem.id}"),
@@ -222,7 +230,12 @@ class _ItemsViewState extends State<ItemsView> {
                                     title: Text(entry.value),
                                     trailing: Icon(Icons.arrow_forward),
                                     onTap: () {
-                                      //TODO: do it
+                                      context
+                                          .read<ItemsViewCubit>()
+                                          .goToItemWithId(
+                                            id: entry.key,
+                                            straightToEditMode: false,
+                                          );
                                     },
                                   );
                                 },

@@ -1,9 +1,11 @@
 import 'package:async/async.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:things_map/core/constants.dart';
 import 'package:things_map/core/entity/item.dart';
 import 'package:equatable/equatable.dart';
 import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/data/items_repostiory.dart';
+import 'package:path/path.dart' as p;
 part 'items_view_state.dart';
 
 class ItemsViewCubit extends Cubit<ItemsViewState> {
@@ -26,138 +28,144 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
             stackTrace: stackTrace,
           ),
         );
-      case ValueResult(:final value):
+      case ValueResult(value: final allItems):
         emit(
           ItemsViewTopLevel(
-            allItems: value,
-            childrenIdNameMap: Map.fromEntries(
-              value
-                  .whereType<NonRoot>()
-                  .where(
-                    (item) => item.isTopLevelItem,
-                  )
-                  .map(
-                    (item) => MapEntry(item.id, item.name),
-                  ),
+            allItems: allItems,
+            childrenIdNameMap: _getChildrenIdNameMap(
+              allItems: allItems,
+              currentId: rootId,
             ),
           ),
         );
     }
   }
 
-  // Future<(Item, String)?> _getItemAndNicePathWithId({
-  //   required Root root,
-  //   required String requiredId,
-  // }) async {
-  //   final currentItemPath = io.Directory(requiredId);
-  //   if (currentItemPath.path == rootDir.path) {
-  //     return (root, rootDir.path);
-  //   } else {
-  //     final parent = currentItemPath.parent;
-  //     final parentData = await _getItemAndNicePathWithId(
-  //       root: root,
-  //       requiredId: parent.path,
-  //     );
-  //     switch (parentData) {
-  //       case (
-  //           InternalItem(
-  //             :final items,
-  //           ),
-  //           String()
-  //         ):
-  //         final item = items
-  //             .where(
-  //               (element) => element.pathId == requiredId,
-  //             )
-  //             .singleOrNull;
-  //         if (item != null) {
-  //           final nicePath = p.join(parentData.$2, item.name);
-  //           return (item, nicePath);
-  //         } else {
-  //           return null;
-  //         }
-  //       default:
-  //         return null;
-  //     }
-  //   }
-  // }
-
-  Future<void> goBack() async {
-    // switch (state) {
-    //   case ItemsViewLoaded(
-    //       :final rootItem,
-    //       :final currentItem,
-    //     ):
-    //     final parentId = io.Directory(currentItem.pathId).parent.path;
-    //     final parentData = await _getItemAndNicePathWithId(
-    //       root: rootItem,
-    //       requiredId: parentId,
-    //     );
-    //     if (parentData != null) {
-    //       emit(
-    //         ItemsViewLoaded(
-    //           rootItem: rootItem,
-    //           currentItem: parentData.$1,
-    //           niceParentPath: io.Directory(parentData.$2).parent.path,
-    //           currentItemImagePaths: [],
-    //           isEditMode: false,
-    //         ),
-    //       );
-    //     }
-    //   default:
-    //     break;
-    // }
+  Map<int, String> _getChildrenIdNameMap({
+    required List<Item> allItems,
+    required int currentId,
+  }) {
+    return Map.fromEntries(
+      allItems
+          .whereType<NonRoot>()
+          .where(
+            (item) => item.parentId == currentId,
+          )
+          .map(
+            (item) => MapEntry(item.id, item.name),
+          ),
+    );
   }
 
-  // String _getNiceParentPath({
-  //   required String currentNiceParentPath,
-  //   required Item currentItem,
-  // }) {
-  //   return p.join(
-  //     currentNiceParentPath,
-  //     (currentItem is Root) ? rootDir.path : currentItem.name,
-  //   );
-  // }
+  String? _getNicePathToId({
+    required List<Item> allItems,
+    required int id,
+  }) {
+    final currentItem = binarySearchItemWithId(items: allItems, id: id);
+    switch (currentItem) {
+      case null:
+      case Root():
+        return "/";
+      case NonRoot(:final parentId):
+        final parentNicePath = _getNicePathToId(
+          allItems: allItems,
+          id: parentId,
+        );
+        if (parentNicePath != null) {
+          return p.join(parentNicePath, currentItem.name);
+        } else {
+          return null;
+        }
+    }
+  }
 
-  Future<void> goToItem({
-    required Item item,
+  Future<void> goToItemWithId({
+    required int id,
     required bool straightToEditMode,
   }) async {
-    // switch (state) {
-    //   case ItemsViewLoaded(
-    //       :final rootItem,
-    //       :final currentItem,
-    //       :final niceParentPath,
-    //     ):
-    //     print("Going to: ${item.pathId}");
-    //     emit(
-    //       ItemsViewLoaded(
-    //         rootItem: rootItem,
-    //         currentItem: item,
-    //         niceParentPath: _getNiceParentPath(
-    //           currentNiceParentPath: niceParentPath,
-    //           currentItem: currentItem,
-    //         ),
-    //         // TODO: actual picture
-    //         currentItemImagePaths: [
-    //           "/home/fgoo/Downloads/4.1.06.png",
-    //           "/home/fgoo/Downloads/control",
-    //           "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
-    //           "/home/fgoo/Downloads/Other Stuff/trolled.webp",
-    //         ],
-    //         isEditMode: straightToEditMode,
-    //       ),
-    //     );
-    //   default:
-    //     break;
-    // }
+    switch (state) {
+      case ItemsViewLoaded(
+          :final allItems,
+        ):
+        emit(ItemsViewLoading());
+        if (id == rootId) {
+          emit(
+            ItemsViewTopLevel(
+              allItems: allItems,
+              childrenIdNameMap: _getChildrenIdNameMap(
+                allItems: allItems,
+                currentId: rootId,
+              ),
+            ),
+          );
+          return;
+        }
+        final foundItem = binarySearchItemWithId(
+          items: allItems,
+          id: id,
+        );
+        switch (foundItem) {
+          case null:
+            emit(ItemsViewError(error: "Cant find item"));
+          case Root(id: final foundId):
+            emit(
+              ItemsViewTopLevel(
+                allItems: allItems,
+                childrenIdNameMap: _getChildrenIdNameMap(
+                  allItems: allItems,
+                  currentId: foundId,
+                ),
+              ),
+            );
+          case InternalItem(
+              id: final foundId,
+            ):
+            emit(
+              ItemsViewInternalLevel(
+                allItems: allItems,
+                currentItem: foundItem,
+                childrenIdNameMap: _getChildrenIdNameMap(
+                  allItems: allItems,
+                  currentId: foundId,
+                ),
+                niceParentPath: _getNicePathToId(
+                      allItems: allItems,
+                      id: foundItem.parentId,
+                    ) ??
+                    "null",
+                currentItemImagePaths: [
+                  "/home/fgoo/Downloads/4.1.06.png",
+                  "/home/fgoo/Downloads/control",
+                  "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
+                  "/home/fgoo/Downloads/Other Stuff/trolled.webp",
+                ],
+                isEditMode: straightToEditMode,
+              ),
+            );
+          case LeafItem():
+            emit(
+              ItemsViewLeafLevel(
+                allItems: allItems,
+                currentItem: foundItem,
+                niceParentPath: _getNicePathToId(
+                      allItems: allItems,
+                      id: foundItem.parentId,
+                    ) ??
+                    "null",
+                currentItemImagePaths: [
+                  "/home/fgoo/Downloads/4.1.06.png",
+                  "/home/fgoo/Downloads/control",
+                  "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
+                  "/home/fgoo/Downloads/Other Stuff/trolled.webp",
+                ],
+                isEditMode: straightToEditMode,
+              ),
+            );
+        }
+      default:
+        break;
+    }
   }
-
-  // Future<void> _addItemToTree({
-  //   required Root rootItem,
-  //   required Item newItem,
-  // }) async {}
-  //
 
   Future<void> saveItem({required NewItem newItem}) async {
     // switch (state) {
@@ -248,21 +256,17 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
 }
 
 Item? binarySearchItemWithId({required List<Item> items, required int id}) {
-  int low = items.first.id;
-  int high = items.last.id;
-  if (id < low || id < high) {
-    return null;
-  } else {
-    while (low < high) {
-      int mid = ((low + high) / 2).floor();
-      if (items[mid].id == id) {
-        return items[mid];
-      } else if (items[mid].id > id) {
-        high = mid - 1;
-      } else {
-        low = mid + 1;
-      }
+  int low = 0;
+  int high = items.length - 1;
+  while (low <= high) {
+    int mid = ((low + high) / 2).floor();
+    if (items[mid].id == id) {
+      return items[mid];
+    } else if (items[mid].id > id) {
+      high = mid - 1;
+    } else {
+      low = mid + 1;
     }
-    return null;
   }
+  return null;
 }

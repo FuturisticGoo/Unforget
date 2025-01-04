@@ -3,7 +3,6 @@ import 'package:things_map/core/constants.dart';
 import 'package:things_map/core/entity/item.dart';
 import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/core/entity/owner.dart';
-import 'package:path/path.dart' as p;
 
 extension _SQLOnlyColumnName on String {
   String get colName {
