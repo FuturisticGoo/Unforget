@@ -44,7 +44,12 @@ class _ItemsViewState extends State<ItemsView> {
           title: Text("Thing Map"),
         ),
         body: BlocConsumer<ItemsViewCubit, ItemsViewState>(
-          listener: (context, state) {},
+          listener: (context, state) {
+            if (state case ItemsViewError(:final error, :final stackTrace)) {
+              print(error);
+              print(stackTrace);
+            }
+          },
           builder: (context, state) {
             switch (state) {
               case ItemsViewInitial():
@@ -57,171 +62,174 @@ class _ItemsViewState extends State<ItemsView> {
                   message: "$error\n$stackTrace",
                 );
 
-              case ItemsViewLoaded(
-                  :final currentItem,
-                  :final niceParentPath,
-                  :final currentItemImagePaths,
-                  :final isEditMode,
-                ):
+              case ItemsViewLoaded():
                 return Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Form(
                     key: _formKey,
                     child: ListView(
                       children: [
-                        ...(currentItem is Root)
-                            ? [
-                                ListHeading("Top Level"),
-                              ]
-                            : [
-                                ListTile(
-                                  title: Text(
-                                    niceParentPath,
-                                  ),
-                                  leading: Icon(Icons.arrow_back),
-                                  onTap: () {
-                                    context.read<ItemsViewCubit>().goBack();
-                                  },
+                        ...switch (state) {
+                          ItemsViewTopLevel() => [
+                              ListHeading("Top Level"),
+                            ],
+                          ItemsViewNonTopLevel(
+                            :final currentItem,
+                            :final niceParentPath,
+                            :final isEditMode,
+                            :final currentItemImagePaths,
+                          ) =>
+                            [
+                              ListTile(
+                                title: Text(
+                                  niceParentPath,
                                 ),
-                                Divider(),
-                                ExpansionTile(
-                                  // childrenPadding: EdgeInsets.zero,
-                                  key: Key(currentItem.pathId),
-                                  shape: Border(),
-                                  title: Text(
-                                    currentItem.name.isEmpty
-                                        ? "New item"
-                                        : currentItem.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyLarge
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
-                                        ),
-                                  ),
-                                  initiallyExpanded: isEditMode,
-                                  children: [
-                                    Visibility(
-                                      visible: currentItemImagePaths.isNotEmpty,
-                                      child:
-                                          //  AspectRatio(
-                                          //   aspectRatio: 1,
-                                          //   child:
-                                          SizedBox(
-                                        width: 200,
-                                        height: 200,
-                                        child: ImageTile(
-                                          imagePaths: currentItemImagePaths,
-                                        ),
+                                leading: Icon(Icons.arrow_back),
+                                onTap: () {
+                                  context.read<ItemsViewCubit>().goBack();
+                                },
+                              ),
+                              Divider(),
+                              ExpansionTile(
+                                // childrenPadding: EdgeInsets.zero,
+                                key: Key("Item:${currentItem.id}"),
+                                shape: Border(),
+                                title: Text(
+                                  currentItem.name.isEmpty
+                                      ? "New item"
+                                      : currentItem.name,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
                                       ),
-                                      // ),
-                                    ),
-                                    ItemInfoTextFormField(
-                                      readOnly: !isEditMode,
-                                      label: "Name",
-                                      initialValue: currentItem.name,
-                                      controller: _nameController,
-                                      validator: (string) {
-                                        if (string == null || string.isEmpty) {
-                                          return "Enter a valid name";
-                                        } else {
-                                          return null;
-                                        }
-                                      },
-                                    ),
-                                    ItemInfoTextFormField(
-                                      readOnly: !isEditMode,
-                                      label: "Price",
-                                      initialValue:
-                                          currentItem.price?.toString() ??
-                                              ((isEditMode) ? "" : "Unknown"),
-                                      controller: _priceController,
-                                      validator: (string) {
-                                        if (string == null || string.isEmpty) {
-                                          return null;
-                                        } else {
-                                          final price = BigInt.tryParse(string);
-                                          return (price == null)
-                                              ? "Invalid price"
-                                              : null;
-                                        }
-                                      },
-                                    ),
-                                    ItemInfoTextFormField(
-                                      readOnly: !isEditMode,
-                                      label: "Quantity",
-                                      initialValue:
-                                          currentItem.quantity.toStringAsFixed(
-                                        (currentItem.quantity.toInt() ==
-                                                currentItem.quantity)
-                                            ? 0
-                                            : 2,
-                                      ),
-                                      controller: _quantityController,
-                                      validator: (string) {
-                                        final quantity =
-                                            double.tryParse(string ?? "");
-                                        if (string == null ||
-                                            string.isEmpty ||
-                                            quantity == null ||
-                                            quantity <= 0) {
-                                          return "Enter a valid quantity";
-                                        } else {
-                                          return null;
-                                        }
-                                      },
-                                    ),
-                                    ItemInfoTextFormField(
-                                      readOnly: !isEditMode,
-                                      label: "Notes",
-                                      initialValue:
-                                          currentItem.extraNotes?.toString() ??
-                                              ((isEditMode) ? "" : "<Blank>"),
-                                      controller: _notesController,
-                                    ),
-                                    SizedBox(
-                                      height: 8,
-                                    ),
-                                    Visibility(
-                                      visible: isEditMode,
-                                      child: ListTile(
-                                        title: Text("Can contain items"),
-                                        trailing: Switch(
-                                          value: _canContainItems,
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _canContainItems = value;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ],
                                 ),
-                              ],
+                                initiallyExpanded: isEditMode,
+                                children: [
+                                  Visibility(
+                                    visible: currentItemImagePaths.isNotEmpty,
+                                    child:
+                                        //  AspectRatio(
+                                        //   aspectRatio: 1,
+                                        //   child:
+                                        SizedBox(
+                                      width: 200,
+                                      height: 200,
+                                      child: ImageTile(
+                                        imagePaths: currentItemImagePaths,
+                                      ),
+                                    ),
+                                    // ),
+                                  ),
+                                  ItemInfoTextFormField(
+                                    readOnly: !isEditMode,
+                                    label: "Name",
+                                    initialValue: currentItem.name,
+                                    controller: _nameController,
+                                    validator: (string) {
+                                      if (string == null || string.isEmpty) {
+                                        return "Enter a valid name";
+                                      } else {
+                                        return null;
+                                      }
+                                    },
+                                  ),
+                                  ItemInfoTextFormField(
+                                    readOnly: !isEditMode,
+                                    label: "Price",
+                                    initialValue:
+                                        currentItem.price?.toString() ??
+                                            ((isEditMode) ? "" : "Unknown"),
+                                    controller: _priceController,
+                                    validator: (string) {
+                                      if (string == null || string.isEmpty) {
+                                        return null;
+                                      } else {
+                                        final price = BigInt.tryParse(string);
+                                        return (price == null)
+                                            ? "Invalid price"
+                                            : null;
+                                      }
+                                    },
+                                  ),
+                                  ItemInfoTextFormField(
+                                    readOnly: !isEditMode,
+                                    label: "Quantity",
+                                    initialValue:
+                                        currentItem.quantity.toStringAsFixed(
+                                      (currentItem.quantity.toInt() ==
+                                              currentItem.quantity)
+                                          ? 0
+                                          : 2,
+                                    ),
+                                    controller: _quantityController,
+                                    validator: (string) {
+                                      final quantity =
+                                          double.tryParse(string ?? "");
+                                      if (string == null ||
+                                          string.isEmpty ||
+                                          quantity == null ||
+                                          quantity <= 0) {
+                                        return "Enter a valid quantity";
+                                      } else {
+                                        return null;
+                                      }
+                                    },
+                                  ),
+                                  ItemInfoTextFormField(
+                                    readOnly: !isEditMode,
+                                    label: "Notes",
+                                    initialValue:
+                                        currentItem.extraNotes?.toString() ??
+                                            ((isEditMode) ? "" : "<Blank>"),
+                                    controller: _notesController,
+                                  ),
+                                  SizedBox(
+                                    height: 8,
+                                  ),
+                                  Visibility(
+                                    visible: isEditMode,
+                                    child: ListTile(
+                                      title: Text("Can contain items"),
+                                      trailing: Switch(
+                                        value: _canContainItems,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _canContainItems = value;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                        },
                         Divider(),
-                        ...(currentItem is InternalItem)
-                            ? [
-                                ListHeading("Contains"),
-                                ...currentItem.items.map(
-                                  (item) {
-                                    return ListTile(
-                                      title: Text(item.name),
-                                      trailing: Icon(Icons.arrow_forward),
-                                      onTap: () {
-                                        context.read<ItemsViewCubit>().goToItem(
-                                              item: item,
-                                              straightToEditMode: false,
-                                            );
-                                      },
-                                    );
-                                  },
-                                )
-                              ]
-                            : []
+                        ...switch (state) {
+                          ItemsViewWithChildren(
+                            childrenIdNameMap: final childrenNames,
+                          ) =>
+                            [
+                              ListHeading("Contains"),
+                              ...childrenNames.entries.map(
+                                (entry) {
+                                  return ListTile(
+                                    title: Text(entry.value),
+                                    trailing: Icon(Icons.arrow_forward),
+                                    onTap: () {
+                                      //TODO: do it
+                                    },
+                                  );
+                                },
+                              )
+                            ],
+                          _ => []
+                        },
                       ],
                     ),
                   ),
@@ -232,7 +240,9 @@ class _ItemsViewState extends State<ItemsView> {
         floatingActionButton: BlocBuilder<ItemsViewCubit, ItemsViewState>(
           builder: (context, state) {
             switch (state) {
-              case ItemsViewLoaded(
+              case ItemsViewLeafLevel():
+                return Container();
+              case ItemsViewNonTopLevel(
                   :final isEditMode,
                   :final currentItem,
                 ):
@@ -241,9 +251,8 @@ class _ItemsViewState extends State<ItemsView> {
                     switch (isEditMode) {
                       case true:
                         if (_formKey.currentState!.validate()) {
-                          print(File(currentItem.pathId).parent.path);
                           final newItem = NewItem(
-                            parentPathId: File(currentItem.pathId).parent.path,
+                            parentId: currentItem.parentId,
                             name: _nameController.text,
                             price: BigInt.tryParse(_priceController.text),
                             quantity: double.parse(_quantityController.text),

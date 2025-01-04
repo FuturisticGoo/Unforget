@@ -1,6 +1,5 @@
 import 'package:things_map/core/constants.dart';
 import 'package:things_map/core/entity/owner.dart';
-import 'package:path/path.dart' as p;
 
 enum ItemType {
   internal,
@@ -8,7 +7,7 @@ enum ItemType {
 }
 
 class NewItem {
-  final String parentPathId;
+  final int parentId;
   final String name;
   final BigInt? price;
   final double quantity;
@@ -17,7 +16,7 @@ class NewItem {
   final DateTime lastUpdated;
   final ItemType itemType;
   const NewItem({
-    required this.parentPathId,
+    required this.parentId,
     required this.name,
     required this.price,
     required this.quantity,
@@ -26,11 +25,7 @@ class NewItem {
     required this.lastUpdated,
     required this.itemType,
   });
-  bool get isImmediateChildOfRoot {
-    return parentPathId == rootDir.path;
-  }
-
-  int get parentBaseId {
-    return int.parse(p.basename(parentPathId));
+  bool get isTopLevelItem {
+    return parentId == rootId;
   }
 }

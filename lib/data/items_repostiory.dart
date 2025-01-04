@@ -4,10 +4,15 @@ import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/data/items_datasource.dart';
 
 abstract class ItemsRepository {
-  Future<Result<Root>> getItemsTree();
+  /// Get all [Item]s from the database
+  Future<Result<List<Item>>> getAllItems();
+
+  /// Save a [NewItem] and return the saved [Item]'s id
   Future<Result<int>> saveNewItem({
     required NewItem newItem,
   });
+
+  /// Get a list of [Item]s with similar name or descriptions
   Future<Result<List<Item>>> getSearchResult({
     required String searchString,
   });
@@ -20,9 +25,9 @@ class ItemsRepositoryImpl implements ItemsRepository {
   });
 
   @override
-  Future<Result<Root>> getItemsTree() async {
+  Future<Result<List<Item>>> getAllItems() async {
     try {
-      final result = await itemsDatasource.getItemsRoot();
+      final result = await itemsDatasource.getAllItems();
       return Result.value(result);
     } catch (error, stackTrace) {
       return Result.error(error, stackTrace);
