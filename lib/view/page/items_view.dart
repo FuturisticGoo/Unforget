@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:things_map/core/entity/item.dart';
 import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/core/init_setup.dart';
 import 'package:things_map/cubit/items_view_cubit.dart';
@@ -68,18 +69,20 @@ class _ItemsViewState extends State<ItemsView> {
                         ListTile(
                           title: Text(
                             switch (state) {
-                              ItemsViewNonTopLevel(:final niceParentPath) =>
+                              ItemsViewCanGoUpward(
+                                nicePath: final niceParentPath
+                              ) =>
                                 niceParentPath,
                               _ => ""
                             },
                           ),
                           leading: Icon(Icons.arrow_back),
-                          enabled: (state is ItemsViewNonTopLevel),
+                          enabled: (state is ItemsViewCanGoUpward),
                           onTap: () {
                             switch (state) {
-                              case ItemsViewNonTopLevel(:final currentItem):
+                              case ItemsViewCanGoUpward(:final parentId):
                                 context.read<ItemsViewCubit>().goToItemWithId(
-                                      id: currentItem.parentId,
+                                      id: parentId,
                                       straightToEditMode: false,
                                     );
                               default:
@@ -92,20 +95,16 @@ class _ItemsViewState extends State<ItemsView> {
                           ItemsViewTopLevel() => [
                               ListHeading("Top Level"),
                             ],
-                          ItemsViewNonTopLevel(
-                            :final currentItem,
-                            :final isEditMode,
-                            :final currentItemImagePaths,
-                          ) =>
+                          ItemsViewNonTopLevel(currentItem: NonRoot? item) ||
+                          ItemsViewEdit(editingItem: NonRoot? item) =>
                             [
                               ExpansionTile(
                                 // childrenPadding: EdgeInsets.zero,
-                                key: Key("Item:${currentItem.id}"),
+                                key: Key(
+                                    "Item:${item?.id ?? -1}${state.runtimeType}"),
                                 shape: Border(),
                                 title: Text(
-                                  currentItem.name.isEmpty
-                                      ? "New item"
-                                      : currentItem.name,
+                                  item?.name ?? "New Item",
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodyLarge
@@ -116,10 +115,12 @@ class _ItemsViewState extends State<ItemsView> {
                                             .primary,
                                       ),
                                 ),
-                                initiallyExpanded: isEditMode,
+                                initiallyExpanded: state is ItemsViewEdit,
                                 children: [
                                   Visibility(
-                                    visible: currentItemImagePaths.isNotEmpty,
+                                    visible: (state
+                                            is ItemsViewInternalLevel) &&
+                                        state.currentItemImagePaths.isNotEmpty,
                                     child:
                                         //  AspectRatio(
                                         //   aspectRatio: 1,
@@ -128,15 +129,18 @@ class _ItemsViewState extends State<ItemsView> {
                                       width: 200,
                                       height: 200,
                                       child: ImageTile(
-                                        imagePaths: currentItemImagePaths,
+                                        imagePaths:
+                                            (state is ItemsViewInternalLevel)
+                                                ? state.currentItemImagePaths
+                                                : [],
                                       ),
                                     ),
                                     // ),
                                   ),
                                   ItemInfoTextFormField(
-                                    readOnly: !isEditMode,
+                                    readOnly: state is! ItemsViewEdit,
                                     label: "Name",
-                                    initialValue: currentItem.name,
+                                    initialValue: item?.name ?? "",
                                     controller: _nameController,
                                     validator: (string) {
                                       if (string == null || string.isEmpty) {
@@ -147,11 +151,12 @@ class _ItemsViewState extends State<ItemsView> {
                                     },
                                   ),
                                   ItemInfoTextFormField(
-                                    readOnly: !isEditMode,
+                                    readOnly: state is! ItemsViewEdit,
                                     label: "Price",
-                                    initialValue:
-                                        currentItem.price?.toString() ??
-                                            ((isEditMode) ? "" : "Unknown"),
+                                    initialValue: item?.price?.toString() ??
+                                        ((state is ItemsViewEdit)
+                                            ? ""
+                                            : "Unknown"),
                                     controller: _priceController,
                                     validator: (string) {
                                       if (string == null || string.isEmpty) {
@@ -165,15 +170,18 @@ class _ItemsViewState extends State<ItemsView> {
                                     },
                                   ),
                                   ItemInfoTextFormField(
-                                    readOnly: !isEditMode,
+                                    readOnly: state is! ItemsViewEdit,
                                     label: "Quantity",
-                                    initialValue:
-                                        currentItem.quantity.toStringAsFixed(
-                                      (currentItem.quantity.toInt() ==
-                                              currentItem.quantity)
-                                          ? 0
-                                          : 2,
-                                    ),
+                                    initialValue: switch (item?.quantity) {
+                                      null => "1",
+                                      double() =>
+                                        item!.quantity.toStringAsFixed(
+                                          (item.quantity.toInt() ==
+                                                  item.quantity)
+                                              ? 0
+                                              : 2,
+                                        ),
+                                    },
                                     controller: _quantityController,
                                     validator: (string) {
                                       final quantity =
@@ -189,18 +197,20 @@ class _ItemsViewState extends State<ItemsView> {
                                     },
                                   ),
                                   ItemInfoTextFormField(
-                                    readOnly: !isEditMode,
+                                    readOnly: state is! ItemsViewEdit,
                                     label: "Notes",
                                     initialValue:
-                                        currentItem.extraNotes?.toString() ??
-                                            ((isEditMode) ? "" : "<Blank>"),
+                                        item?.extraNotes?.toString() ??
+                                            ((state is ItemsViewEdit)
+                                                ? ""
+                                                : "<Blank>"),
                                     controller: _notesController,
                                   ),
                                   SizedBox(
                                     height: 8,
                                   ),
                                   Visibility(
-                                    visible: isEditMode,
+                                    visible: state is ItemsViewEdit,
                                     child: ListTile(
                                       title: Text("Can contain items"),
                                       trailing: Switch(
@@ -220,25 +230,39 @@ class _ItemsViewState extends State<ItemsView> {
                         Divider(),
                         ...switch (state) {
                           ItemsViewWithChildren(
-                            childrenIdNameMap: final childrenNames,
+                            :final children,
                           ) =>
                             [
                               ListHeading("Contains"),
-                              ...childrenNames.entries.map(
-                                (entry) {
+                              ...children.map(
+                                (item) {
                                   return ListTile(
-                                    title: Text(entry.value),
+                                    title: Text(item.name),
                                     trailing: Icon(Icons.arrow_forward),
                                     onTap: () {
                                       context
                                           .read<ItemsViewCubit>()
                                           .goToItemWithId(
-                                            id: entry.key,
+                                            id: item.id,
                                             straightToEditMode: false,
                                           );
                                     },
                                   );
                                 },
+                              ),
+                              SizedBox(
+                                height: 10,
+                              ),
+                              Center(
+                                child: OutlinedButton.icon(
+                                  icon: Icon(Icons.add),
+                                  onPressed: () async {
+                                    await context
+                                        .read<ItemsViewCubit>()
+                                        .showAddOrEditItem();
+                                  },
+                                  label: Text("Add item"),
+                                ),
                               )
                             ],
                           _ => []
@@ -253,41 +277,44 @@ class _ItemsViewState extends State<ItemsView> {
         floatingActionButton: BlocBuilder<ItemsViewCubit, ItemsViewState>(
           builder: (context, state) {
             switch (state) {
-              case ItemsViewLeafLevel():
-                return Container();
-              case ItemsViewNonTopLevel(
-                  :final isEditMode,
-                  :final currentItem,
+              case ItemsViewEdit(
+                  :final parentId,
+                  :final editingItem,
                 ):
                 return FloatingActionButton.extended(
                   onPressed: () async {
-                    switch (isEditMode) {
-                      case true:
-                        if (_formKey.currentState!.validate()) {
-                          final newItem = NewItem(
-                            parentId: currentItem.parentId,
-                            name: _nameController.text,
-                            price: BigInt.tryParse(_priceController.text),
-                            quantity: double.parse(_quantityController.text),
-                            extraNotes: _notesController.text,
-                            owners: [],
-                            lastUpdated: DateTime.now(),
-                            itemType: _canContainItems
-                                ? ItemType.internal
-                                : ItemType.leaf,
+                    if (_formKey.currentState!.validate()) {
+                      final newItem = NewItem(
+                        editingId: editingItem?.id,
+                        parentId: parentId,
+                        name: _nameController.text,
+                        price: BigInt.tryParse(_priceController.text),
+                        quantity: double.parse(_quantityController.text),
+                        extraNotes: _notesController.text,
+                        // TODO: owners
+                        owners: [],
+                        lastUpdated: DateTime.now(),
+                        itemType: _canContainItems
+                            ? ItemType.internal
+                            : ItemType.leaf,
+                      );
+                      await context.read<ItemsViewCubit>().saveItem(
+                            newItem: newItem,
                           );
-                          await context.read<ItemsViewCubit>().saveItem(
-                                newItem: newItem,
-                              );
-                        }
-                      case false:
-                        await context.read<ItemsViewCubit>().showAddItem();
                     }
                   },
-                  label: isEditMode ? Text("Save") : Text("Add item"),
-                  icon: Icon(
-                    isEditMode ? Icons.save : Icons.add,
-                  ),
+                  icon: Icon(Icons.save),
+                  label: Text("Save"),
+                );
+              case ItemsViewNonTopLevel(:final currentItem):
+                return FloatingActionButton.extended(
+                  onPressed: () async {
+                    await context.read<ItemsViewCubit>().showAddOrEditItem(
+                          editingItem: currentItem,
+                        );
+                  },
+                  icon: Icon(Icons.edit),
+                  label: Text("Edit"),
                 );
               default:
                 return Container();

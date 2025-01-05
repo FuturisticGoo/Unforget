@@ -30,61 +30,89 @@ sealed class ItemsViewLoaded extends ItemsViewState with EquatableMixin {
 }
 
 mixin ItemsViewWithChildren {
-  Map<int, String> get childrenIdNameMap;
+  List<NonRoot> get children;
+}
+mixin ItemsViewCanGoUpward {
+  int get parentId;
+  String get nicePath;
 }
 
-class ItemsViewTopLevel extends ItemsViewLoaded with ItemsViewWithChildren {
+class ItemsViewEdit extends ItemsViewLoaded with ItemsViewCanGoUpward {
   @override
-  final Map<int, String> childrenIdNameMap;
-  const ItemsViewTopLevel({
+  final int parentId;
+  @override
+  final String nicePath;
+
+  /// If this [editingItem] is null, then it means adding a new item
+  final NonRoot? editingItem;
+  const ItemsViewEdit({
     required super.allItems,
-    required this.childrenIdNameMap,
+    required this.parentId,
+    required this.nicePath,
+    this.editingItem,
   });
   @override
   List<Object?> get props => [
         ...super.props,
-        childrenIdNameMap,
+        parentId,
+        nicePath,
+        editingItem,
       ];
 }
 
-sealed class ItemsViewNonTopLevel extends ItemsViewLoaded {
-  final String niceParentPath;
+class ItemsViewTopLevel extends ItemsViewLoaded with ItemsViewWithChildren {
+  @override
+  final List<NonRoot> children;
+  const ItemsViewTopLevel({
+    required super.allItems,
+    required this.children,
+  });
+  @override
+  List<Object?> get props => [
+        ...super.props,
+        children,
+      ];
+}
+
+sealed class ItemsViewNonTopLevel extends ItemsViewLoaded
+    with ItemsViewCanGoUpward {
+  @override
+  int get parentId => currentItem.parentId;
+
+  @override
+  final String nicePath;
   final NonRoot currentItem;
   final List<String> currentItemImagePaths;
-  final bool isEditMode;
   const ItemsViewNonTopLevel({
     required super.allItems,
     required this.currentItem,
-    required this.niceParentPath,
+    required this.nicePath,
     required this.currentItemImagePaths,
-    required this.isEditMode,
   });
   @override
   List<Object?> get props => [
         ...super.props,
         currentItem,
-        niceParentPath,
+        nicePath,
         currentItemImagePaths,
-        isEditMode,
       ];
 }
 
 class ItemsViewInternalLevel extends ItemsViewNonTopLevel
     with ItemsViewWithChildren {
   @override
-  final Map<int, String> childrenIdNameMap;
+  final List<NonRoot> children;
   const ItemsViewInternalLevel({
     required super.allItems,
     required super.currentItem,
-    required this.childrenIdNameMap,
-    required super.niceParentPath,
+    required this.children,
+    required super.nicePath,
     required super.currentItemImagePaths,
-    required super.isEditMode,
   });
   @override
   List<Object?> get props => [
         ...super.props,
-        childrenIdNameMap,
+        children,
       ];
 }
 
@@ -92,8 +120,18 @@ class ItemsViewLeafLevel extends ItemsViewNonTopLevel {
   const ItemsViewLeafLevel({
     required super.allItems,
     required super.currentItem,
-    required super.niceParentPath,
+    required super.nicePath,
     required super.currentItemImagePaths,
-    required super.isEditMode,
   });
+}
+
+extension _EditItem on ItemsViewNonTopLevel {
+  ItemsViewEdit get editItem {
+    return ItemsViewEdit(
+      editingItem: currentItem,
+      allItems: allItems,
+      parentId: parentId,
+      nicePath: nicePath,
+    );
+  }
 }

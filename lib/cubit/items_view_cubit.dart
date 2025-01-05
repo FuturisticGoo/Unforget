@@ -32,7 +32,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
         emit(
           ItemsViewTopLevel(
             allItems: allItems,
-            childrenIdNameMap: _getChildrenIdNameMap(
+            children: _getChildrenOfItem(
               allItems: allItems,
               currentId: rootId,
             ),
@@ -41,20 +41,16 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     }
   }
 
-  Map<int, String> _getChildrenIdNameMap({
+  List<NonRoot> _getChildrenOfItem({
     required List<Item> allItems,
     required int currentId,
   }) {
-    return Map.fromEntries(
-      allItems
-          .whereType<NonRoot>()
-          .where(
-            (item) => item.parentId == currentId,
-          )
-          .map(
-            (item) => MapEntry(item.id, item.name),
-          ),
-    );
+    return allItems
+        .whereType<NonRoot>()
+        .where(
+          (item) => item.parentId == currentId,
+        )
+        .toList();
   }
 
   String? _getNicePathToId({
@@ -92,7 +88,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           emit(
             ItemsViewTopLevel(
               allItems: allItems,
-              childrenIdNameMap: _getChildrenIdNameMap(
+              children: _getChildrenOfItem(
                 allItems: allItems,
                 currentId: rootId,
               ),
@@ -111,7 +107,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
             emit(
               ItemsViewTopLevel(
                 allItems: allItems,
-                childrenIdNameMap: _getChildrenIdNameMap(
+                children: _getChildrenOfItem(
                   allItems: allItems,
                   currentId: foundId,
                 ),
@@ -120,46 +116,45 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           case InternalItem(
               id: final foundId,
             ):
-            emit(
-              ItemsViewInternalLevel(
+            final newState = ItemsViewInternalLevel(
+              allItems: allItems,
+              currentItem: foundItem,
+              children: _getChildrenOfItem(
                 allItems: allItems,
-                currentItem: foundItem,
-                childrenIdNameMap: _getChildrenIdNameMap(
-                  allItems: allItems,
-                  currentId: foundId,
-                ),
-                niceParentPath: _getNicePathToId(
-                      allItems: allItems,
-                      id: foundItem.parentId,
-                    ) ??
-                    "null",
-                currentItemImagePaths: [
-                  "/home/fgoo/Downloads/4.1.06.png",
-                  "/home/fgoo/Downloads/control",
-                  "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
-                  "/home/fgoo/Downloads/Other Stuff/trolled.webp",
-                ],
-                isEditMode: straightToEditMode,
+                currentId: foundId,
               ),
+              nicePath: _getNicePathToId(
+                    allItems: allItems,
+                    id: foundItem.id,
+                  ) ??
+                  "null",
+              currentItemImagePaths: [
+                "/home/fgoo/Downloads/4.1.06.png",
+                "/home/fgoo/Downloads/control",
+                "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
+                "/home/fgoo/Downloads/Other Stuff/trolled.webp",
+              ],
             );
+
+            emit((straightToEditMode) ? newState.editItem : newState);
           case LeafItem():
+            final newState = ItemsViewLeafLevel(
+              allItems: allItems,
+              currentItem: foundItem,
+              nicePath: _getNicePathToId(
+                    allItems: allItems,
+                    id: foundItem.id,
+                  ) ??
+                  "null",
+              currentItemImagePaths: [
+                "/home/fgoo/Downloads/4.1.06.png",
+                "/home/fgoo/Downloads/control",
+                "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
+                "/home/fgoo/Downloads/Other Stuff/trolled.webp",
+              ],
+            );
             emit(
-              ItemsViewLeafLevel(
-                allItems: allItems,
-                currentItem: foundItem,
-                niceParentPath: _getNicePathToId(
-                      allItems: allItems,
-                      id: foundItem.parentId,
-                    ) ??
-                    "null",
-                currentItemImagePaths: [
-                  "/home/fgoo/Downloads/4.1.06.png",
-                  "/home/fgoo/Downloads/control",
-                  "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
-                  "/home/fgoo/Downloads/Other Stuff/trolled.webp",
-                ],
-                isEditMode: straightToEditMode,
-              ),
+              (straightToEditMode) ? newState.editItem : newState,
             );
         }
       default:
@@ -168,90 +163,53 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
   }
 
   Future<void> saveItem({required NewItem newItem}) async {
-    // switch (state) {
-    //   case ItemsViewLoaded(:final currentItem, isEditMode: true):
-    //     final parentPath = currentItem.parentPathId;
-    //     final saveResult = await thingsRepository.saveNewItem(newItem: newItem);
-    //     switch (saveResult) {
-    //       case ErrorResult(:final error):
-    //         emit(ItemsViewError(error: error));
-    //       case ValueResult(:final value):
-    //         await _loadThings();
-
-    //         // emit(ItemsViewLoaded(rootItem: rootItem, currentItem: currentItem, niceParentPath: niceParentPath, currentItemImagePaths: currentItemImagePaths, isEditMode: isEditMode))
-    //         final newItemPath = p.join(
-    //           parentPath,
-    //           value.toString(),
-    //         );
-    //         print("Path: $newItemPath");
-    //         if (state case ItemsViewLoaded(rootItem: final newRootItem)) {
-    //           final addedItemAndPath = await _getItemAndNicePathWithId(
-    //             root: newRootItem,
-    //             requiredId: newItemPath,
-    //           );
-    //           if (addedItemAndPath != null) {
-    //             await goToItem(
-    //               item: addedItemAndPath.$1,
-    //               straightToEditMode: false,
-    //             );
-    //           } else {
-    //             emit(
-    //               ItemsViewError(
-    //                 error: UnimplementedError(
-    //                   "Unable to find item",
-    //                 ),
-    //               ),
-    //             );
-    //           }
-    //         }
-    //     }
-    //   default:
-    //     break;
-    // }
+    switch (state) {
+      case ItemsViewEdit():
+        final saveResult = await thingsRepository.saveNewItem(newItem: newItem);
+        switch (saveResult) {
+          case ErrorResult(:final error):
+            emit(ItemsViewError(error: error));
+          case ValueResult(:final value):
+            await _loadThings();
+            await goToItemWithId(id: value, straightToEditMode: false);
+        }
+      default:
+        break;
+    }
   }
 
-  Future<void> showAddItem() async {
-    //   switch (state) {
-    //     case ItemsViewLoaded(
-    //           :final rootItem,
-    //           :final currentItem,
-    //           :final niceParentPath,
-    //         )
-    //         when currentItem is InternalItem:
-    //       // final currentGreatestChildItemBaseId = currentItem.items.fold(
-    //       //   0,
-    //       //   (previousValue, element) {
-    //       //     return (previousValue < element.baseId)
-    //       //         ? element.baseId
-    //       //         : previousValue;
-    //       //   },
-    //       // );
-    //       final newItem = InternalItem(
-    //         pathId: p.join(currentItem.pathId, "0"),
-    //         // pathId: p.join(
-    //         //   currentItem.pathId,
-    //         //   (currentGreatestChildItemBaseId + 1).toString(),
-    //         // ),
-    //         name: "",
-    //         items: [],
-    //         owners: [],
-    //         lastUpdated: DateTime.now(),
-    //       );
-    //       emit(
-    //         ItemsViewLoaded(
-    //           rootItem: rootItem,
-    //           currentItem: newItem,
-    //           niceParentPath: _getNiceParentPath(
-    //             currentNiceParentPath: niceParentPath,
-    //             currentItem: currentItem,
-    //           ),
-    //           currentItemImagePaths: [],
-    //           isEditMode: true,
-    //         ),
-    //       );
-    //     default:
-    //       break;
-    //   }
+  Future<void> showAddOrEditItem({
+    NonRoot? editingItem,
+  }) async {
+    switch (state) {
+      case ItemsViewTopLevel(:final allItems):
+        emit(
+          ItemsViewEdit(
+            allItems: allItems,
+            parentId: rootId,
+            nicePath: "/",
+            editingItem: editingItem,
+          ),
+        );
+      case ItemsViewNonTopLevel(
+          :final allItems,
+          :final currentItem,
+        ):
+        emit(
+          ItemsViewEdit(
+            allItems: allItems,
+            parentId: currentItem.id,
+            nicePath: _getNicePathToId(
+                  allItems: allItems,
+                  id: currentItem.id,
+                ) ??
+                "",
+            editingItem: editingItem,
+          ),
+        );
+      default:
+        break;
+    }
   }
 }
 

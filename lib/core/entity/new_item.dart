@@ -7,6 +7,7 @@ enum ItemType {
 }
 
 class NewItem {
+  final int? editingId;
   final int parentId;
   final String name;
   final BigInt? price;
@@ -16,6 +17,7 @@ class NewItem {
   final DateTime lastUpdated;
   final ItemType itemType;
   const NewItem({
+    this.editingId,
     required this.parentId,
     required this.name,
     required this.price,
@@ -28,4 +30,6 @@ class NewItem {
   bool get isTopLevelItem {
     return parentId == rootId;
   }
+
+  bool get isEditingExisting => editingId != null;
 }
