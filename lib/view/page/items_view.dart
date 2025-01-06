@@ -25,6 +25,7 @@ class _ItemsViewState extends State<ItemsView> {
   bool _canContainItems = true;
   final _formKey = GlobalKey<FormState>();
   Map<Owner, bool> _ownerSelection = {};
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -44,25 +45,31 @@ class _ItemsViewState extends State<ItemsView> {
         ),
         body: BlocConsumer<ItemsViewCubit, ItemsViewState>(
           listener: (context, state) {
-            if (state case ItemsViewError(:final error, :final stackTrace)) {
-              print(error);
-              print(stackTrace);
-            }
-
-            if (state
-                case ItemsViewEdit(:final allOwners, :final editingItem)) {
-              final alreadySelected = editingItem?.owners ?? [];
-              setState(
-                () {
-                  _ownerSelection = Map.fromEntries(
-                    allOwners.map(
-                      (e) {
-                        return MapEntry(e, alreadySelected.contains(e));
-                      },
-                    ),
-                  );
-                },
-              );
+            switch (state) {
+              case ItemsViewEdit(:final allOwners, :final editingItem):
+                final alreadySelected = editingItem?.owners ?? [];
+                setState(
+                  () {
+                    _ownerSelection = Map.fromEntries(
+                      allOwners.map(
+                        (e) {
+                          return MapEntry(e, alreadySelected.contains(e));
+                        },
+                      ),
+                    );
+                  },
+                );
+              case ItemsViewInternalLevel(:final currentItem):
+                _ownerSelection = Map.fromEntries(
+                  currentItem.owners.map(
+                    (owner) => MapEntry(owner, true),
+                  ),
+                );
+              case ItemsViewError(:final error, :final stackTrace):
+                print(error);
+                print(stackTrace);
+              default:
+                break;
             }
           },
           builder: (context, state) {
@@ -144,8 +151,10 @@ class _ItemsViewState extends State<ItemsView> {
                                         //   aspectRatio: 1,
                                         //   child:
                                         SizedBox(
-                                      width: 200,
-                                      height: 200,
+                                      width: MediaQuery.sizeOf(context).width *
+                                          0.9,
+                                      height: MediaQuery.sizeOf(context).width *
+                                          0.5,
                                       child: ImageTile(
                                         imagePaths:
                                             (state is ItemsViewInternalLevel)
@@ -216,24 +225,25 @@ class _ItemsViewState extends State<ItemsView> {
                                   ),
                                   OwnersChip(
                                     readOnly: state is! ItemsViewEdit,
-                                    ownersSelectionMap: switch (state) {
-                                      ItemsViewNonTopLevel(
-                                        :final currentItem
-                                      ) =>
-                                        Map.fromEntries(
-                                          currentItem.owners.map(
-                                            (e) {
-                                              return MapEntry(e, true);
-                                            },
-                                          ),
-                                        ),
-                                      ItemsViewEdit() => _ownerSelection,
-                                      _ => {},
-                                    },
-                                    onSelect: (owner, selected) {
+                                    label: "Owners",
+                                    ownerSelectionMap: _ownerSelection,
+                                    onSelected: (owner, selected) {
                                       setState(() {
                                         _ownerSelection[owner] = selected;
                                       });
+                                    },
+                                    onDeleted: (owner) {
+                                      setState(() {
+                                        _ownerSelection.remove(owner);
+                                      });
+                                    },
+                                    onNew: (owner) {
+                                      setState(() {
+                                        _ownerSelection[owner] = true;
+                                      });
+                                      context
+                                          .read<ItemsViewCubit>()
+                                          .addNewOwner(owner: owner);
                                     },
                                   ),
                                   ItemInfoTextFormField(

@@ -195,6 +195,10 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     }
   }
 
+  Future<void> addNewOwner({required Owner owner}) async {
+    await thingsRepository.saveOwner(owner: owner);
+  }
+
   Future<void> showAddOrEditItem({
     NonRoot? editingItem,
   }) async {

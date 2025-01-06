@@ -19,7 +19,7 @@ abstract class ItemsRepository {
     required String searchString,
   });
   Future<Result<List<Owner>>> getAllOwners();
-  Future<Result<void>> saveOrModifyOwner();
+  Future<Result<void>> saveOwner({required Owner owner});
 }
 
 class ItemsRepositoryImpl implements ItemsRepository {
@@ -65,14 +65,19 @@ class ItemsRepositoryImpl implements ItemsRepository {
   }
 
   @override
-  Future<Result<void>> saveOrModifyOwner() {
-    // TODO: implement saveOrModifyOwner
-    throw UnimplementedError();
+  Future<Result<void>> saveOwner({required Owner owner}) async {
+    try {
+      await itemsDatasource.saveNewOwner(owner: owner);
+      return Result.value(null);
+    } catch (error, stackTrace) {
+      return Result.error(error, stackTrace);
+    }
   }
 
   @override
-  Future<Result<List<Item>>> getSearchResult(
-      {required String searchString}) async {
+  Future<Result<List<Item>>> getSearchResult({
+    required String searchString,
+  }) async {
     if (itemsDatasource is ItemsDataSourceSQLite) {
       try {
         final result = await (itemsDatasource as ItemsDataSourceSQLite)
