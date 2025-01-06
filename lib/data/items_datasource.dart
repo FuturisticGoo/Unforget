@@ -12,7 +12,14 @@ extension _SQLOnlyColumnName on String {
 
 abstract class ItemsDatasource {
   Future<List<Item>> getAllItems();
-  Future<int> saveNewItem({required NewItem newItem});
+  Future<int> saveOrModifyItem({
+    required NewItem newItem,
+    NonRoot? oldItem,
+  });
+  Future<List<Owner>> getAllOwners();
+  Future<void> saveNewOwner({
+    required Owner owner,
+  });
 }
 
 class ItemsDataSourceSQLite implements ItemsDatasource {
@@ -79,6 +86,50 @@ CREATE TABLE IF NOT EXISTS
     """);
   }
 
+  Future<List<Owner>> _getOwnersOfItem({required int itemId}) async {
+    final ownersFinderResult = await db.rawQuery(
+      """
+SELECT 
+  ${OwnersTable.name}
+FROM 
+  ${OwnersTable.tableName}
+    INNER JOIN 
+      ${ItemsOwnedByTable.tableName}
+        ON 
+          ${OwnersTable.id}=${ItemsOwnedByTable.ownerId}
+WHERE
+  ${ItemsOwnedByTable.itemId}=?
+    """,
+      [itemId],
+    );
+    List<Owner> owners = ownersFinderResult.map(
+      (ownerRow) {
+        return Owner(name: ownerRow[OwnersTable.name.colName].toString());
+      },
+    ).toList();
+    return owners;
+  }
+
+  Future<List<int>> _getChildrenIdsOfItem({required int itemId}) async {
+    final childrenFinderResult = await db.rawQuery(
+      """
+SELECT 
+  ${ItemIsInsideTable.itemId}
+FROM 
+  ${ItemIsInsideTable.tableName}
+WHERE
+  ${ItemIsInsideTable.itemId}=?
+    """,
+      [itemId],
+    );
+    List<int> children = childrenFinderResult.map(
+      (childRow) {
+        return childRow[ItemIsInsideTable.itemId.colName] as int;
+      },
+    ).toList();
+    return children;
+  }
+
   @override
   Future<List<Item>> getAllItems() async {
     await _ensureTables();
@@ -124,33 +175,15 @@ FROM
       isTopLevel = (row[isTopLevelCol] != null) ? true : false;
       canContainItems = (row[ItemsTable.canContainItems.colName] as int) == 1;
       priceString = row[ItemsTable.price.colName]?.toString();
-      price = (priceString == null) ? null : BigInt.parse(priceString);
+      price = (priceString == null) ? null : BigInt.tryParse(priceString);
       name = row[ItemsTable.name.colName].toString();
       quantity = row[ItemsTable.quantity.colName] as double;
       extraNotes = row[ItemsTable.extraNotes.colName].toString();
       lastUpdated = DateTime.parse(
         row[ItemsTable.lastUpdated.colName].toString(),
       );
-      final ownersFinderResult = await db.rawQuery(
-        _ownerFinderStmt,
-        [id],
-      );
-      List<Owner> owners = ownersFinderResult.map(
-        (ownerRow) {
-          return Owner(name: ownerRow[OwnersTable.name.colName].toString());
-        },
-      ).toList();
-
-      final childrenFinderResult = await db.rawQuery(
-        _childrenFinderStmt,
-        [id],
-      );
-      List<int> children = childrenFinderResult.map(
-        (childRow) {
-          return childRow[ItemIsInsideTable.itemId.colName] as int;
-        },
-      ).toList();
-
+      final owners = await _getOwnersOfItem(itemId: id);
+      final children = await _getChildrenIdsOfItem(itemId: id);
       if (canContainItems) {
         allItems.add(
           InternalItem(
@@ -183,11 +216,40 @@ FROM
     return allItems;
   }
 
-  @override
-  Future<int> saveNewItem({required NewItem newItem}) async {
-    await _ensureTables();
-    // Inserting into [ItemsTable]
-    final rowId = await db.rawInsert(
+  Future<void> _updateExisting({
+    required NewItem newItem,
+    required NonRoot oldItem,
+  }) async {
+    await db.rawUpdate(
+      """
+UPDATE 
+  ${ItemsTable.tableName}
+SET
+  ${ItemsTable.name.colName}=?,
+  ${ItemsTable.canContainItems.colName}=?,
+  ${ItemsTable.price.colName}=?,
+  ${ItemsTable.quantity.colName}=?,
+  ${ItemsTable.extraNotes.colName}=?,
+  ${ItemsTable.lastUpdated.colName}=?
+WHERE
+  ${ItemsTable.id}=?
+      """,
+      [
+        newItem.name,
+        newItem.itemType == ItemType.internal ? 1 : 0,
+        newItem.price?.toString() ?? oldItem.price.toString(),
+        newItem.quantity,
+        newItem.extraNotes ?? oldItem.extraNotes,
+        newItem.lastUpdated.toIso8601String(),
+        newItem.editingId ?? oldItem.id,
+      ],
+    );
+  }
+
+  Future<int> _insertNewItem({
+    required NewItem newItem,
+  }) async {
+    return await db.rawInsert(
       """
 INSERT INTO
   ${ItemsTable.tableName}
@@ -211,11 +273,30 @@ VALUES
         newItem.lastUpdated.toIso8601String(),
       ],
     );
+  }
 
-    if (!newItem.isTopLevelItem) {
-      // Inserting into [ItemIsInsideTable] if its not top level item
-      await db.rawInsert(
-        """
+  Future<void> _deleteParentRelation({
+    required int itemId,
+  }) async {
+    await db.rawDelete(
+      """
+DELETE FROM
+  ${ItemIsInsideTable.tableName}
+WHERE
+  ${ItemIsInsideTable.itemId.colName}=?
+    """,
+      [
+        itemId,
+      ],
+    );
+  }
+
+  Future<void> _addParentRelation({
+    required int itemId,
+    required int parentId,
+  }) async {
+    await db.rawInsert(
+      """
 INSERT INTO
   ${ItemIsInsideTable.tableName}
   (
@@ -225,15 +306,21 @@ INSERT INTO
 VALUES
   (?, ?)
     """,
-        [
-          rowId,
-          newItem.parentId,
-        ],
-      );
-    }
+      [
+        itemId,
+        parentId,
+      ],
+    );
+  }
 
+  Future<List<int>> _getOwnerIdsFromNames({required List<String> names}) async {
     // Getting list of owner ids from owner name in [OwnersTable]
-    final argQMarks = List.filled(newItem.owners.length, "?").join(",");
+    final argQMarks = List.filled(
+      names.length,
+      "?",
+    ).join(
+      ",",
+    );
     final ownersResult = await db.rawQuery(
       """
 SELECT
@@ -243,20 +330,35 @@ FROM
 WHERE
   ${OwnersTable.name} IN ($argQMarks)
     """,
-      newItem.owners
-          .map(
-            (owner) => owner.name,
-          )
-          .toList(),
+      names,
     );
-    final ownerIds = ownersResult.map(
+    return ownersResult.map(
       (e) {
         return e[OwnersTable.id.colName] as int;
       },
     ).toList();
+  }
 
-    // Inserting into [ItemsOwnedByTable]
-    final ownersStmt = """
+  Future<void> _deleteOwnerRelationOfItem({required int itemId}) async {
+    await db.rawDelete(
+      """
+DELETE FROM
+  ${ItemsOwnedByTable.tableName}
+WHERE
+  ${ItemsOwnedByTable.itemId.colName}=?
+    """,
+      [
+        itemId,
+      ],
+    );
+  }
+
+  Future<void> _addOwnerRelationForItem({
+    required int itemId,
+    required int ownerId,
+  }) async {
+    await db.rawInsert(
+      """
 INSERT INTO
   ${ItemsOwnedByTable.tableName}
   (
@@ -265,19 +367,26 @@ INSERT INTO
   )
 VALUES
   (?, ?)
-    """;
-    for (final ownerId in ownerIds) {
-      await db.rawInsert(
-        ownersStmt,
-        [rowId, ownerId],
-      );
-    }
+    """,
+      [itemId, ownerId],
+    );
+  }
 
-    // If the item is an immediate child of root, then add it to
-    // the [RootLevelItemsTable]
-    if (newItem.isTopLevelItem) {
-      await db.rawInsert(
-        """
+  Future<void> _deleteItemFromTopLevel({required int itemId}) async {
+    await db.rawDelete(
+      """
+DELETE FROM
+  ${TopLevelItemsTable.tableName}
+WHERE
+  ${TopLevelItemsTable.itemId.colName}=?
+    """,
+      [itemId],
+    );
+  }
+
+  Future<void> _addItemToTopLevel({required int itemId}) async {
+    await db.rawInsert(
+      """
 INSERT INTO
   ${TopLevelItemsTable.tableName}
   (
@@ -286,10 +395,111 @@ INSERT INTO
 VALUES
   (?)
       """,
-        [rowId],
-      );
+      [itemId],
+    );
+  }
+
+  @override
+  Future<int> saveOrModifyItem({
+    required NewItem newItem,
+    NonRoot? oldItem,
+  }) async {
+    await _ensureTables();
+
+    final int itemId;
+    if (oldItem != null && newItem.editingId == oldItem.id) {
+      // If existing item, only update
+      itemId = oldItem.id;
+      await _updateExisting(newItem: newItem, oldItem: oldItem);
+    } else {
+      // Else insert into [ItemsTable]
+      itemId = await _insertNewItem(newItem: newItem);
     }
-    return rowId;
+
+    if (!newItem.isTopLevelItem) {
+      // Deleting existing parent relation, because it's easier
+      await _deleteParentRelation(itemId: itemId);
+      // Inserting into [ItemIsInsideTable] if its not top level item
+      await _addParentRelation(itemId: itemId, parentId: newItem.parentId);
+    }
+
+    final ownerIds = await _getOwnerIdsFromNames(
+      names: newItem.owners
+          .map(
+            (owner) => owner.name,
+          )
+          .toList(),
+    );
+    // Inserting into [ItemsOwnedByTable]
+    // First deleting existing because easier
+    await _deleteOwnerRelationOfItem(itemId: itemId);
+    for (final ownerId in ownerIds) {
+      await _addOwnerRelationForItem(itemId: itemId, ownerId: ownerId);
+    }
+
+    await _deleteItemFromTopLevel(itemId: itemId);
+    // If the item is an immediate child of root, then add it to
+    // the [RootLevelItemsTable]
+    if (newItem.isTopLevelItem) {
+      await _addItemToTopLevel(itemId: itemId);
+    }
+    return itemId;
+  }
+
+  Future<bool> _isOwnerInTable({required Owner owner}) async {
+    final resultSet = await db.rawQuery(
+      """
+SELECT
+  ${OwnersTable.id.colName}
+FROM
+  ${OwnersTable.tableName}
+WHERE 
+  ${OwnersTable.name.colName}=?
+    """,
+      [
+        owner.name,
+      ],
+    );
+    return resultSet.isNotEmpty;
+  }
+
+  Future<void> _addNewOwner({required Owner owner}) async {
+    await db.rawInsert(
+      """
+INSERT INTO
+  ${OwnersTable.tableName}
+    (
+      ${OwnersTable.name.colName}
+    )
+VALUES
+  (?)
+    """,
+      [owner.name],
+    );
+  }
+
+  @override
+  Future<void> saveNewOwner({required Owner owner}) async {
+    if (!(await _isOwnerInTable(owner: owner))) {
+      await _addNewOwner(owner: owner);
+    }
+  }
+
+  @override
+  Future<List<Owner>> getAllOwners() async {
+    final ownersResult = await db.rawQuery(
+      """
+SELECT
+  ${OwnersTable.name.colName}
+FROM
+  ${OwnersTable.tableName}
+    """,
+    );
+    return ownersResult.map(
+      (entry) {
+        return Owner(name: entry[OwnersTable.name.colName].toString());
+      },
+    ).toList();
   }
 
   Future<List<Item>> getItemSearchMatches({
@@ -298,25 +508,3 @@ VALUES
     throw UnimplementedError();
   }
 }
-
-String _ownerFinderStmt = """
-SELECT 
-  ${OwnersTable.name}
-FROM 
-  ${OwnersTable.tableName}
-    INNER JOIN 
-      ${ItemsOwnedByTable.tableName}
-        ON 
-          ${OwnersTable.id}=${ItemsOwnedByTable.ownerId}
-WHERE
-  ${ItemsOwnedByTable.itemId}=?
-    """;
-
-String _childrenFinderStmt = """
-SELECT 
-  ${ItemIsInsideTable.itemId}
-FROM 
-  ${ItemIsInsideTable.tableName}
-WHERE
-  ${ItemIsInsideTable.itemId}=?
-    """;

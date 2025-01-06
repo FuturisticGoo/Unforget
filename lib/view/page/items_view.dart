@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:things_map/core/entity/item.dart';
 import 'package:things_map/core/entity/new_item.dart';
+import 'package:things_map/core/entity/owner.dart';
 import 'package:things_map/core/init_setup.dart';
 import 'package:things_map/cubit/items_view_cubit.dart';
 import 'package:things_map/view/widgets/image_tile.dart';
 import 'package:things_map/view/widgets/item_info_text_field.dart';
 import 'package:things_map/view/widgets/list_heading.dart';
+import 'package:things_map/view/widgets/owners_chip.dart';
 
 class ItemsView extends StatefulWidget {
   const ItemsView({super.key});
@@ -22,7 +24,7 @@ class _ItemsViewState extends State<ItemsView> {
   final _notesController = TextEditingController();
   bool _canContainItems = true;
   final _formKey = GlobalKey<FormState>();
-
+  Map<Owner, bool> _ownerSelection = {};
   @override
   void dispose() {
     _nameController.dispose();
@@ -45,6 +47,22 @@ class _ItemsViewState extends State<ItemsView> {
             if (state case ItemsViewError(:final error, :final stackTrace)) {
               print(error);
               print(stackTrace);
+            }
+
+            if (state
+                case ItemsViewEdit(:final allOwners, :final editingItem)) {
+              final alreadySelected = editingItem?.owners ?? [];
+              setState(
+                () {
+                  _ownerSelection = Map.fromEntries(
+                    allOwners.map(
+                      (e) {
+                        return MapEntry(e, alreadySelected.contains(e));
+                      },
+                    ),
+                  );
+                },
+              );
             }
           },
           builder: (context, state) {
@@ -196,6 +214,28 @@ class _ItemsViewState extends State<ItemsView> {
                                       }
                                     },
                                   ),
+                                  OwnersChip(
+                                    readOnly: state is! ItemsViewEdit,
+                                    ownersSelectionMap: switch (state) {
+                                      ItemsViewNonTopLevel(
+                                        :final currentItem
+                                      ) =>
+                                        Map.fromEntries(
+                                          currentItem.owners.map(
+                                            (e) {
+                                              return MapEntry(e, true);
+                                            },
+                                          ),
+                                        ),
+                                      ItemsViewEdit() => _ownerSelection,
+                                      _ => {},
+                                    },
+                                    onSelect: (owner, selected) {
+                                      setState(() {
+                                        _ownerSelection[owner] = selected;
+                                      });
+                                    },
+                                  ),
                                   ItemInfoTextFormField(
                                     readOnly: state is! ItemsViewEdit,
                                     label: "Notes",
@@ -291,8 +331,14 @@ class _ItemsViewState extends State<ItemsView> {
                         price: BigInt.tryParse(_priceController.text),
                         quantity: double.parse(_quantityController.text),
                         extraNotes: _notesController.text,
-                        // TODO: owners
-                        owners: [],
+                        owners: _ownerSelection.entries
+                            .where(
+                              (o) => o.value,
+                            )
+                            .map(
+                              (e) => e.key,
+                            )
+                            .toList(),
                         lastUpdated: DateTime.now(),
                         itemType: _canContainItems
                             ? ItemType.internal
@@ -300,6 +346,7 @@ class _ItemsViewState extends State<ItemsView> {
                       );
                       await context.read<ItemsViewCubit>().saveItem(
                             newItem: newItem,
+                            oldItem: editingItem,
                           );
                     }
                   },

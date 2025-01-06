@@ -20,12 +20,15 @@ class ItemsViewError extends ItemsViewState {
 
 sealed class ItemsViewLoaded extends ItemsViewState with EquatableMixin {
   final List<Item> allItems;
+  final List<Owner> allOwners;
   const ItemsViewLoaded({
     required this.allItems,
+    required this.allOwners,
   });
   @override
   List<Object?> get props => [
         allItems,
+        allOwners,
       ];
 }
 
@@ -47,6 +50,7 @@ class ItemsViewEdit extends ItemsViewLoaded with ItemsViewCanGoUpward {
   final NonRoot? editingItem;
   const ItemsViewEdit({
     required super.allItems,
+    required super.allOwners,
     required this.parentId,
     required this.nicePath,
     this.editingItem,
@@ -65,6 +69,7 @@ class ItemsViewTopLevel extends ItemsViewLoaded with ItemsViewWithChildren {
   final List<NonRoot> children;
   const ItemsViewTopLevel({
     required super.allItems,
+    required super.allOwners,
     required this.children,
   });
   @override
@@ -85,6 +90,7 @@ sealed class ItemsViewNonTopLevel extends ItemsViewLoaded
   final List<String> currentItemImagePaths;
   const ItemsViewNonTopLevel({
     required super.allItems,
+    required super.allOwners,
     required this.currentItem,
     required this.nicePath,
     required this.currentItemImagePaths,
@@ -104,6 +110,7 @@ class ItemsViewInternalLevel extends ItemsViewNonTopLevel
   final List<NonRoot> children;
   const ItemsViewInternalLevel({
     required super.allItems,
+    required super.allOwners,
     required super.currentItem,
     required this.children,
     required super.nicePath,
@@ -119,6 +126,7 @@ class ItemsViewInternalLevel extends ItemsViewNonTopLevel
 class ItemsViewLeafLevel extends ItemsViewNonTopLevel {
   const ItemsViewLeafLevel({
     required super.allItems,
+    required super.allOwners,
     required super.currentItem,
     required super.nicePath,
     required super.currentItemImagePaths,
@@ -128,8 +136,9 @@ class ItemsViewLeafLevel extends ItemsViewNonTopLevel {
 extension _EditItem on ItemsViewNonTopLevel {
   ItemsViewEdit get editItem {
     return ItemsViewEdit(
-      editingItem: currentItem,
       allItems: allItems,
+      allOwners: allOwners,
+      editingItem: currentItem,
       parentId: parentId,
       nicePath: nicePath,
     );

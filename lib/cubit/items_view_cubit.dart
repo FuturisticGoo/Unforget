@@ -4,6 +4,7 @@ import 'package:things_map/core/constants.dart';
 import 'package:things_map/core/entity/item.dart';
 import 'package:equatable/equatable.dart';
 import 'package:things_map/core/entity/new_item.dart';
+import 'package:things_map/core/entity/owner.dart';
 import 'package:things_map/data/items_repostiory.dart';
 import 'package:path/path.dart' as p;
 part 'items_view_state.dart';
@@ -18,20 +19,25 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
 
   Future<void> _loadThings() async {
     emit(ItemsViewLoading());
-    final result = await thingsRepository.getAllItems();
-
-    switch (result) {
-      case ErrorResult(:final error, :final stackTrace):
+    final itemsResult = await thingsRepository.getAllItems();
+    final ownersResult = await thingsRepository.getAllOwners();
+    switch ((itemsResult, ownersResult)) {
+      case (_, ErrorResult(:final error, :final stackTrace)):
+      case (ErrorResult(:final error, :final stackTrace), _):
         emit(
           ItemsViewError(
             error: error,
             stackTrace: stackTrace,
           ),
         );
-      case ValueResult(value: final allItems):
+      case (
+          ValueResult(value: final allItems),
+          ValueResult(value: final allOwners)
+        ):
         emit(
           ItemsViewTopLevel(
             allItems: allItems,
+            allOwners: allOwners,
             children: _getChildrenOfItem(
               allItems: allItems,
               currentId: rootId,
@@ -82,12 +88,14 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     switch (state) {
       case ItemsViewLoaded(
           :final allItems,
+          :final allOwners,
         ):
         emit(ItemsViewLoading());
         if (id == rootId) {
           emit(
             ItemsViewTopLevel(
               allItems: allItems,
+              allOwners: allOwners,
               children: _getChildrenOfItem(
                 allItems: allItems,
                 currentId: rootId,
@@ -107,6 +115,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
             emit(
               ItemsViewTopLevel(
                 allItems: allItems,
+                allOwners: allOwners,
                 children: _getChildrenOfItem(
                   allItems: allItems,
                   currentId: foundId,
@@ -118,6 +127,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
             ):
             final newState = ItemsViewInternalLevel(
               allItems: allItems,
+              allOwners: allOwners,
               currentItem: foundItem,
               children: _getChildrenOfItem(
                 allItems: allItems,
@@ -140,6 +150,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           case LeafItem():
             final newState = ItemsViewLeafLevel(
               allItems: allItems,
+              allOwners: allOwners,
               currentItem: foundItem,
               nicePath: _getNicePathToId(
                     allItems: allItems,
@@ -162,10 +173,16 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     }
   }
 
-  Future<void> saveItem({required NewItem newItem}) async {
+  Future<void> saveItem({
+    required NewItem newItem,
+    NonRoot? oldItem,
+  }) async {
     switch (state) {
       case ItemsViewEdit():
-        final saveResult = await thingsRepository.saveNewItem(newItem: newItem);
+        final saveResult = await thingsRepository.saveOrModifyItem(
+          newItem: newItem,
+          oldItem: oldItem,
+        );
         switch (saveResult) {
           case ErrorResult(:final error):
             emit(ItemsViewError(error: error));
@@ -182,10 +199,14 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     NonRoot? editingItem,
   }) async {
     switch (state) {
-      case ItemsViewTopLevel(:final allItems):
+      case ItemsViewTopLevel(
+          :final allItems,
+          :final allOwners,
+        ):
         emit(
           ItemsViewEdit(
             allItems: allItems,
+            allOwners: allOwners,
             parentId: rootId,
             nicePath: "/",
             editingItem: editingItem,
@@ -193,12 +214,14 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
         );
       case ItemsViewNonTopLevel(
           :final allItems,
+          :final allOwners,
           :final currentItem,
         ):
         emit(
           ItemsViewEdit(
             allItems: allItems,
-            parentId: currentItem.id,
+            allOwners: allOwners,
+            parentId: editingItem?.parentId ?? currentItem.id,
             nicePath: _getNicePathToId(
                   allItems: allItems,
                   id: currentItem.id,
