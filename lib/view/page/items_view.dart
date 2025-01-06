@@ -59,7 +59,7 @@ class _ItemsViewState extends State<ItemsView> {
                     );
                   },
                 );
-              case ItemsViewInternalLevel(:final currentItem):
+              case ItemsViewNonTopLevel(:final currentItem):
                 _ownerSelection = Map.fromEntries(
                   currentItem.owners.map(
                     (owner) => MapEntry(owner, true),

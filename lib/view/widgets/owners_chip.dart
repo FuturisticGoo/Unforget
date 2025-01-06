@@ -64,12 +64,16 @@ class _OwnersChipState extends State<OwnersChip> {
                         return FilterChip(
                           selected: widget.ownerSelectionMap[owner] ?? false,
                           label: Text(owner.name),
-                          deleteIcon: Icon(Icons.close),
-                          onDeleted: () {
-                            if (!widget.readOnly) {
-                              widget.onDeleted(owner);
-                            }
-                          },
+                          showCheckmark: !widget.readOnly,
+                          deleteIcon:
+                              widget.readOnly ? null : Icon(Icons.close),
+                          onDeleted: widget.readOnly
+                              ? null
+                              : () {
+                                  if (!widget.readOnly) {
+                                    widget.onDeleted(owner);
+                                  }
+                                },
                           onSelected: (selected) {
                             if (!widget.readOnly) {
                               widget.onSelected(owner, selected);

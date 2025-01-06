@@ -13,6 +13,8 @@ Future<void> initSetup() async {
     dbFileName,
   );
   databaseFactory = databaseFactoryFfi;
+  sqfliteFfiInit();
+  // databaseFactory = databaseFactoryFfi;
   final db = await openDatabase(dbPath);
   sl.registerSingleton<Database>(db);
   sl.registerSingleton<ItemsDatasource>(

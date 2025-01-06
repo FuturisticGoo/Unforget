@@ -3,6 +3,7 @@ import 'package:things_map/core/init_setup.dart';
 import 'package:things_map/view/page/items_view.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await initSetup();
   runApp(const ThingsMapApp());
 }
