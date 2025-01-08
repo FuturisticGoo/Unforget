@@ -14,8 +14,8 @@ abstract class ItemsDatasource {
   Future<List<Item>> getAllItems();
   Future<int> saveOrModifyItem({
     required NewItem newItem,
-    NonRoot? oldItem,
   });
+  Future<void> deleteItem({required int itemId});
   Future<List<Owner>> getAllOwners();
   Future<void> saveNewOwner({
     required Owner owner,
@@ -118,7 +118,7 @@ SELECT
 FROM 
   ${ItemIsInsideTable.tableName}
 WHERE
-  ${ItemIsInsideTable.itemId}=?
+  ${ItemIsInsideTable.containerId}=?
     """,
       [itemId],
     );
@@ -202,7 +202,7 @@ FROM
         allItems.add(
           LeafItem(
             id: id,
-            parentId: parentId!,
+            parentId: isTopLevel ? rootId : parentId!,
             name: name,
             owners: owners,
             lastUpdated: lastUpdated,
@@ -216,9 +216,28 @@ FROM
     return allItems;
   }
 
+  @override
+  Future<void> deleteItem({required int itemId}) async {
+    await _deleteItemFromTopLevel(itemId: itemId); // NOOP if not in top level
+    await _deleteOwnerRelationOfItem(itemId: itemId);
+    final children = await _getChildrenIdsOfItem(itemId: itemId);
+    for (final childId in children) {
+      await deleteItem(itemId: childId);
+    }
+    await _deleteParentRelation(itemId: itemId);
+    await db.rawDelete(
+      """
+DELETE FROM 
+  ${ItemsTable.tableName}
+WHERE
+  ${ItemsTable.id.colName}=?
+    """,
+      [itemId],
+    );
+  }
+
   Future<void> _updateExisting({
     required NewItem newItem,
-    required NonRoot oldItem,
   }) async {
     await db.rawUpdate(
       """
@@ -237,11 +256,11 @@ WHERE
       [
         newItem.name,
         newItem.itemType == ItemType.internal ? 1 : 0,
-        newItem.price?.toString() ?? oldItem.price.toString(),
+        newItem.price?.toString() ?? newItem.editingItem?.price.toString(),
         newItem.quantity,
-        newItem.extraNotes ?? oldItem.extraNotes,
+        newItem.extraNotes ?? newItem.editingItem?.extraNotes,
         newItem.lastUpdated.toIso8601String(),
-        newItem.editingId ?? oldItem.id,
+        newItem.editingItem?.id ?? newItem.editingItem?.id,
       ],
     );
   }
@@ -275,6 +294,8 @@ VALUES
     );
   }
 
+  /// Deletes [NonRoot] with [itemId] from the relation, so that it no longer
+  /// has a parent relation
   Future<void> _deleteParentRelation({
     required int itemId,
   }) async {
@@ -339,6 +360,7 @@ WHERE
     ).toList();
   }
 
+  /// Removes any ownership relations of this [Item]
   Future<void> _deleteOwnerRelationOfItem({required int itemId}) async {
     await db.rawDelete(
       """
@@ -372,6 +394,7 @@ VALUES
     );
   }
 
+  /// Removes this [Item] from the top level table, NOOP if not in the table
   Future<void> _deleteItemFromTopLevel({required int itemId}) async {
     await db.rawDelete(
       """
@@ -402,23 +425,25 @@ VALUES
   @override
   Future<int> saveOrModifyItem({
     required NewItem newItem,
-    NonRoot? oldItem,
   }) async {
     await _ensureTables();
 
     final int itemId;
-    if (oldItem != null && newItem.editingId == oldItem.id) {
+    if (newItem.editingItem != null) {
       // If existing item, only update
-      itemId = oldItem.id;
-      await _updateExisting(newItem: newItem, oldItem: oldItem);
+      itemId = newItem.editingItem!.id;
+      await _updateExisting(newItem: newItem);
     } else {
       // Else insert into [ItemsTable]
       itemId = await _insertNewItem(newItem: newItem);
     }
 
-    if (!newItem.isTopLevelItem) {
+    if (newItem.editingItem?.isTopLevelItem == false) {
       // Deleting existing parent relation, because it's easier
       await _deleteParentRelation(itemId: itemId);
+    }
+
+    if (!newItem.isTopLevelItem) {
       // Inserting into [ItemIsInsideTable] if its not top level item
       await _addParentRelation(itemId: itemId, parentId: newItem.parentId);
     }

@@ -11,13 +11,14 @@ abstract class ItemsRepository {
   /// Save a [NewItem] and return the saved [Item]'s id
   Future<Result<int>> saveOrModifyItem({
     required NewItem newItem,
-    NonRoot? oldItem,
   });
 
   /// Get a list of [Item]s with similar name or descriptions
   Future<Result<List<Item>>> getSearchResult({
     required String searchString,
   });
+
+  Future<Result<void>> deleteItem({required int itemId});
   Future<Result<List<Owner>>> getAllOwners();
   Future<Result<void>> saveOwner({required Owner owner});
 }
@@ -41,13 +42,21 @@ class ItemsRepositoryImpl implements ItemsRepository {
   @override
   Future<Result<int>> saveOrModifyItem({
     required NewItem newItem,
-    NonRoot? oldItem,
   }) async {
     try {
       final id = await itemsDatasource.saveOrModifyItem(
         newItem: newItem,
-        oldItem: oldItem,
       );
+      return Result.value(id);
+    } catch (error, stackTrace) {
+      return Result.error(error, stackTrace);
+    }
+  }
+
+  @override
+  Future<Result<void>> deleteItem({required int itemId}) async {
+    try {
+      final id = await itemsDatasource.deleteItem(itemId: itemId);
       return Result.value(id);
     } catch (error, stackTrace) {
       return Result.error(error, stackTrace);

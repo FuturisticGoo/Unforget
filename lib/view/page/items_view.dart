@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:things_map/core/constants.dart';
 import 'package:things_map/core/entity/item.dart';
 import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/core/entity/owner.dart';
@@ -24,6 +25,7 @@ class _ItemsViewState extends State<ItemsView> {
   final _notesController = TextEditingController();
   bool _canContainItems = true;
   final _formKey = GlobalKey<FormState>();
+  final _menuController = MenuController();
   Map<Owner, bool> _ownerSelection = {};
 
   @override
@@ -286,16 +288,180 @@ class _ItemsViewState extends State<ItemsView> {
                               ListHeading("Contains"),
                               ...children.map(
                                 (item) {
-                                  return ListTile(
-                                    title: Text(item.name),
-                                    trailing: Icon(Icons.arrow_forward),
-                                    onTap: () {
-                                      context
-                                          .read<ItemsViewCubit>()
-                                          .goToItemWithId(
-                                            id: item.id,
-                                            straightToEditMode: false,
-                                          );
+                                  // return MenuAnchor(
+                                  //   controller: _menuController,
+                                  //   menuChildren: [
+                                  //     MenuItemButton(
+                                  //       onPressed: () async {
+                                  //         //TODO; Move
+                                  //       },
+                                  //       child: const Row(
+                                  //         children: [
+                                  //           Icon(Icons.edit),
+                                  //           SizedBox(
+                                  //             width: 5,
+                                  //           ),
+                                  //           Text("Edit"),
+                                  //         ],
+                                  //       ),
+                                  //     ),
+                                  //     MenuItemButton(
+                                  //       onPressed: () async {
+                                  //         // final shouldDelete =
+                                  //         //     await confirmDeletionDialog(
+                                  //         //         context);
+                                  //         // if (shouldDelete == true) {
+                                  //         // TODO: delet
+                                  //         // }
+                                  //       },
+                                  //       child: const Row(
+                                  //         children: [
+                                  //           Icon(Icons.delete),
+                                  //           SizedBox(
+                                  //             width: 5,
+                                  //           ),
+                                  //           Text("Delete"),
+                                  //         ],
+                                  //       ),
+                                  //     ),
+                                  //   ],
+                                  // child:
+                                  return GestureDetector(
+                                    child: ListTile(
+                                      title: Text(item.name),
+                                      trailing: Icon(Icons.arrow_forward),
+                                      onTap: () {
+                                        context
+                                            .read<ItemsViewCubit>()
+                                            .goToItemWithId(
+                                              id: item.id,
+                                              straightToEditMode: false,
+                                            );
+                                      },
+
+                                      // ),
+                                    ),
+                                    onLongPressStart: (details) {
+                                      showMenu(
+                                        context: context,
+                                        position: RelativeRect.fromLTRB(
+                                          details.globalPosition.dx,
+                                          details.globalPosition.dy,
+                                          details.globalPosition.dx + 40,
+                                          details.globalPosition.dy + 15,
+                                        ),
+                                        items: [
+                                          PopupMenuItem(
+                                            onTap: () {
+                                              final snack = SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    Text(
+                                                        "Copying ${item.name}"),
+                                                    Spacer(),
+                                                    IconButton(
+                                                      onPressed: () async {
+                                                        final latestState = context
+                                                            .read<
+                                                                ItemsViewCubit>()
+                                                            .state;
+                                                        switch (latestState) {
+                                                          case ItemsViewNonTopLevel(
+                                                                :final currentItem
+                                                              )
+                                                              when currentItem
+                                                                      .id !=
+                                                                  item.id:
+                                                            await context
+                                                                .read<
+                                                                    ItemsViewCubit>()
+                                                                .saveItem(
+                                                                  newItem: NewItem
+                                                                      .fromNonRoot(
+                                                                    item: item,
+                                                                    parentId:
+                                                                        currentItem
+                                                                            .id,
+                                                                  ),
+                                                                  oldItem: item,
+                                                                );
+                                                            if (context
+                                                                .mounted) {
+                                                              ScaffoldMessenger
+                                                                  .of(
+                                                                context,
+                                                              ).clearSnackBars();
+                                                            }
+
+                                                          case ItemsViewTopLevel():
+                                                            await context
+                                                                .read<
+                                                                    ItemsViewCubit>()
+                                                                .saveItem(
+                                                                  newItem: NewItem
+                                                                      .fromNonRoot(
+                                                                    item: item,
+                                                                    parentId:
+                                                                        rootId,
+                                                                  ),
+                                                                  oldItem: item,
+                                                                );
+                                                            if (context
+                                                                .mounted) {
+                                                              ScaffoldMessenger
+                                                                  .of(
+                                                                context,
+                                                              ).clearSnackBars();
+                                                            }
+                                                          default:
+                                                            break;
+                                                        }
+                                                      },
+                                                      icon: Icon(
+                                                        Icons.paste,
+                                                        color: Theme.of(context)
+                                                            .buttonTheme
+                                                            .colorScheme
+                                                            ?.onPrimary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                duration: Duration(days: 365),
+                                              );
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(snack);
+                                            },
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.cut),
+                                                SizedBox(
+                                                  width: 5,
+                                                ),
+                                                Text("Cut"),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            onTap: () async {
+                                              await context
+                                                  .read<ItemsViewCubit>()
+                                                  .deleteItem(
+                                                    item: item,
+                                                  );
+                                            },
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.delete),
+                                                SizedBox(
+                                                  width: 5,
+                                                ),
+                                                Text("Delete"),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      );
                                     },
                                   );
                                 },
@@ -335,7 +501,7 @@ class _ItemsViewState extends State<ItemsView> {
                   onPressed: () async {
                     if (_formKey.currentState!.validate()) {
                       final newItem = NewItem(
-                        editingId: editingItem?.id,
+                        editingItem: editingItem,
                         parentId: parentId,
                         name: _nameController.text,
                         price: BigInt.tryParse(_priceController.text),

@@ -108,6 +108,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           items: allItems,
           id: id,
         );
+        print(foundItem);
         switch (foundItem) {
           case null:
             emit(ItemsViewError(error: "Cant find item"));
@@ -177,22 +178,20 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     required NewItem newItem,
     NonRoot? oldItem,
   }) async {
-    switch (state) {
-      case ItemsViewEdit():
-        final saveResult = await thingsRepository.saveOrModifyItem(
-          newItem: newItem,
-          oldItem: oldItem,
-        );
-        switch (saveResult) {
-          case ErrorResult(:final error):
-            emit(ItemsViewError(error: error));
-          case ValueResult(:final value):
-            await _loadThings();
-            await goToItemWithId(id: value, straightToEditMode: false);
-        }
-      default:
-        break;
+    // switch (state) {
+    // case ItemsViewEdit():
+    final saveResult =
+        await thingsRepository.saveOrModifyItem(newItem: newItem);
+    switch (saveResult) {
+      case ErrorResult(:final error):
+        emit(ItemsViewError(error: error));
+      case ValueResult(:final value):
+        await _loadThings();
+        await goToItemWithId(id: value, straightToEditMode: false);
     }
+    //   default:
+    //     break;
+    // }
   }
 
   Future<void> addNewOwner({required Owner owner}) async {
@@ -236,6 +235,25 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
         );
       default:
         break;
+    }
+  }
+
+  Future<void> deleteItem({required NonRoot item}) async {
+    final result = await thingsRepository.deleteItem(itemId: item.id);
+    switch (result) {
+      case ValueResult():
+        await _loadThings();
+        await goToItemWithId(
+          id: item.parentId,
+          straightToEditMode: false,
+        );
+      case ErrorResult(:final error, :final stackTrace):
+        emit(
+          ItemsViewError(
+            error: error,
+            stackTrace: stackTrace,
+          ),
+        );
     }
   }
 }
