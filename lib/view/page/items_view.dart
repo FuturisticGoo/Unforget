@@ -19,6 +19,7 @@ class ItemsView extends StatefulWidget {
 }
 
 class _ItemsViewState extends State<ItemsView> {
+  final _searchTextController = TextEditingController();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController();
@@ -29,6 +30,7 @@ class _ItemsViewState extends State<ItemsView> {
 
   @override
   void dispose() {
+    _searchTextController.dispose();
     _nameController.dispose();
     _priceController.dispose();
     _quantityController.dispose();
@@ -39,10 +41,36 @@ class _ItemsViewState extends State<ItemsView> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => ItemsViewCubit(thingsRepository: sl()),
+      create: (context) => ItemsViewCubit(itemsRepository: sl()),
       child: Scaffold(
         appBar: AppBar(
-          title: Text("Thing Map"),
+          title: Text("Unforget"),
+          actions: [
+            BlocBuilder<ItemsViewCubit, ItemsViewState>(
+              builder: (context, state) {
+                switch (state) {
+                  case ItemsViewLoaded():
+                    return IconButton(
+                      onPressed: () async {
+                        if (state case ItemsViewSearch(:final lastItemId)) {
+                          context.read<ItemsViewCubit>().goToItemWithId(
+                                id: lastItemId,
+                                straightToEditMode: false,
+                              );
+                        } else {
+                          await context
+                              .read<ItemsViewCubit>()
+                              .searchForItem(searchTerm: "");
+                        }
+                      },
+                      icon: Icon(Icons.search),
+                    );
+                  default:
+                    return Container();
+                }
+              },
+            ),
+          ],
         ),
         body: BlocConsumer<ItemsViewCubit, ItemsViewState>(
           listener: (context, state) {
@@ -84,7 +112,64 @@ class _ItemsViewState extends State<ItemsView> {
                 return ErrorWidget.withDetails(
                   message: "$error\n$stackTrace",
                 );
-
+              case ItemsViewSearch(
+                  :final searchResults,
+                ):
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      TextField(
+                        autofocus: true,
+                        controller: _searchTextController,
+                        decoration: InputDecoration(
+                          label: Text("Search"),
+                          suffixIcon: IconButton(
+                            onPressed: () {
+                              _searchTextController.clear();
+                              context
+                                  .read<ItemsViewCubit>()
+                                  .searchForItem(searchTerm: "");
+                            },
+                            icon: Icon(
+                              Icons.close,
+                            ),
+                          ),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) async {
+                          context.read<ItemsViewCubit>().searchForItem(
+                                searchTerm: value,
+                              );
+                        },
+                      ),
+                      SizedBox(
+                        height: 10,
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: searchResults.length,
+                          itemBuilder: (context, index) {
+                            return ListTile(
+                              title: Text(
+                                searchResults[index].name,
+                              ),
+                              onTap: () async {
+                                _searchTextController.clear();
+                                await context
+                                    .read<ItemsViewCubit>()
+                                    .goToItemWithId(
+                                      id: searchResults[index].id,
+                                      straightToEditMode: false,
+                                    );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
               case ItemsViewLoaded():
                 return Padding(
                   padding: const EdgeInsets.all(8.0),
@@ -121,6 +206,7 @@ class _ItemsViewState extends State<ItemsView> {
                           ItemsViewTopLevel() => [
                               ListHeading("Top Level"),
                             ],
+                          ItemsViewSearch() => [],
                           ItemsViewNonTopLevel(currentItem: NonRoot? item) ||
                           ItemsViewEdit(editingItem: NonRoot? item) =>
                             [

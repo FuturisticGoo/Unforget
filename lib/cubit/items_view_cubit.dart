@@ -1,6 +1,7 @@
 import 'package:async/async.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:text_search/text_search.dart';
 import 'package:things_map/core/constants.dart';
 import 'package:things_map/core/entity/item.dart';
 import 'package:equatable/equatable.dart';
@@ -11,17 +12,18 @@ import 'package:path/path.dart' as p;
 part 'items_view_state.dart';
 
 class ItemsViewCubit extends Cubit<ItemsViewState> {
-  final ItemsRepository thingsRepository;
+  final ItemsRepository itemsRepository;
+  List<TextSearchItem<NonRoot>>? _searchItemsCache;
   ItemsViewCubit({
-    required this.thingsRepository,
+    required this.itemsRepository,
   }) : super(ItemsViewInitial()) {
     _loadThings();
   }
 
   Future<void> _loadThings() async {
     emit(ItemsViewLoading());
-    final itemsResult = await thingsRepository.getAllItems();
-    final ownersResult = await thingsRepository.getAllOwners();
+    final itemsResult = await itemsRepository.getAllItems();
+    final ownersResult = await itemsRepository.getAllOwners();
     switch ((itemsResult, ownersResult)) {
       case (_, ErrorResult(:final error, :final stackTrace)):
       case (ErrorResult(:final error, :final stackTrace), _):
@@ -35,6 +37,11 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           ValueResult(value: final allItems),
           ValueResult(value: final allOwners)
         ):
+        _searchItemsCache = allItems.map(
+          (item) {
+            return TextSearchItem.fromTerms(item, [item.name]);
+          },
+        ).toList();
         emit(
           ItemsViewTopLevel(
             allItems: allItems,
@@ -67,7 +74,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     final currentItem = binarySearchItemWithId(items: allItems, id: id);
     switch (currentItem) {
       case null:
-      case Root():
+        // case Root():
         return "/";
       case NonRoot(:final parentId):
         final parentNicePath = _getNicePathToId(
@@ -111,7 +118,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
         );
         List<String> imagePaths = [];
         if (foundItem != null) {
-          final imagesResult = await thingsRepository.getImagesForItem(
+          final imagesResult = await itemsRepository.getImagesForItem(
             itemId: foundItem.id,
           );
           if (imagesResult case ValueResult(:final value)) {
@@ -121,17 +128,17 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
         switch (foundItem) {
           case null:
             emit(ItemsViewError(error: "Cant find item"));
-          case Root(id: final foundId):
-            emit(
-              ItemsViewTopLevel(
-                allItems: allItems,
-                allOwners: allOwners,
-                children: _getChildrenOfItem(
-                  allItems: allItems,
-                  currentId: foundId,
-                ),
-              ),
-            );
+          // case Root(id: final foundId):
+          //   emit(
+          //     ItemsViewTopLevel(
+          //       allItems: allItems,
+          //       allOwners: allOwners,
+          //       children: _getChildrenOfItem(
+          //         allItems: allItems,
+          //         currentId: foundId,
+          //       ),
+          //     ),
+          //   );
           case InternalItem(
               id: final foundId,
             ):
@@ -216,14 +223,13 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
   }) async {
     // switch (state) {
     // case ItemsViewEdit():
-    final saveResult =
-        await thingsRepository.saveOrModifyItem(newItem: newItem);
+    final saveResult = await itemsRepository.saveOrModifyItem(newItem: newItem);
     switch (saveResult) {
       case ErrorResult(:final error):
         emit(ItemsViewError(error: error));
       case ValueResult(:final value):
         if (images != null) {
-          final imageResult = await thingsRepository.saveImages(
+          final imageResult = await itemsRepository.saveImages(
             itemId: value,
             images: images,
           );
@@ -237,7 +243,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
   }
 
   Future<void> addNewOwner({required Owner owner}) async {
-    await thingsRepository.saveOwner(owner: owner);
+    await itemsRepository.saveOwner(owner: owner);
   }
 
   Future<void> showAddOrEditItem({
@@ -284,7 +290,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
   }
 
   Future<void> deleteItem({required NonRoot item}) async {
-    final result = await thingsRepository.deleteItem(itemId: item.id);
+    final result = await itemsRepository.deleteItem(itemId: item.id);
     switch (result) {
       case ValueResult():
         await _loadThings();
@@ -300,6 +306,49 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           ),
         );
     }
+  }
+
+  Future<void> searchForItem({required String searchTerm}) async {
+    switch (state) {
+      case ItemsViewLoaded(
+          :final allItems,
+          :final allOwners,
+        ):
+        emit(
+          ItemsViewSearch(
+            allItems: allItems,
+            allOwners: allOwners,
+            searchResults: searchTerm.isEmpty
+                ? []
+                : await _searchItemsForString(
+                    allItems: allItems,
+                    searchTerm: searchTerm,
+                  ),
+            lastItemId: switch (state) {
+              ItemsViewNonTopLevel(:final currentItem) => currentItem.id,
+              ItemsViewSearch(:final lastItemId) => lastItemId,
+              _ => rootId,
+            },
+          ),
+        );
+      default:
+        break;
+    }
+  }
+
+  Future<List<NonRoot>> _searchItemsForString({
+    required List<NonRoot> allItems,
+    required String searchTerm,
+  }) async {
+    _searchItemsCache ??= _searchItemsCache = allItems.map(
+      (item) {
+        return TextSearchItem.fromTerms(item, [item.name]);
+      },
+    ).toList();
+
+    final searcher = TextSearch(_searchItemsCache!);
+    final result = searcher.fastSearch(searchTerm);
+    return result;
   }
 }
 

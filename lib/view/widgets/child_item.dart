@@ -105,6 +105,11 @@ class ChildItem extends StatelessWidget {
             ),
             PopupMenuItem(
               onTap: () async {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).clearSnackBars();
+                }
                 await context.read<ItemsViewCubit>().deleteItem(
                       item: item,
                     );

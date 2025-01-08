@@ -19,7 +19,7 @@ class ItemsViewError extends ItemsViewState {
 }
 
 sealed class ItemsViewLoaded extends ItemsViewState with EquatableMixin {
-  final List<Item> allItems;
+  final List<NonRoot> allItems;
   final List<Owner> allOwners;
   const ItemsViewLoaded({
     required this.allItems,
@@ -29,6 +29,23 @@ sealed class ItemsViewLoaded extends ItemsViewState with EquatableMixin {
   List<Object?> get props => [
         allItems,
         allOwners,
+      ];
+}
+
+class ItemsViewSearch extends ItemsViewLoaded with EquatableMixin {
+  final List<NonRoot> searchResults;
+  final int lastItemId;
+  ItemsViewSearch({
+    required super.allItems,
+    required super.allOwners,
+    required this.searchResults,
+    required this.lastItemId,
+  });
+  @override
+  List<Object?> get props => [
+        ...super.props,
+        searchResults,
+        lastItemId,
       ];
 }
 

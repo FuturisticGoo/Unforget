@@ -11,7 +11,7 @@ extension _SQLOnlyColumnName on String {
 }
 
 abstract class ItemsDatasource {
-  Future<List<Item>> getAllItems();
+  Future<List<NonRoot>> getAllItems();
   Future<int> saveOrModifyItem({
     required NewItem newItem,
   });
@@ -138,10 +138,10 @@ WHERE
   }
 
   @override
-  Future<List<Item>> getAllItems() async {
+  Future<List<NonRoot>> getAllItems() async {
     await _ensureTables();
 
-    List<Item> allItems = [];
+    List<NonRoot> allItems = [];
     final parentIdCol = "parent_id";
     final isTopLevelCol = "is_top_level";
     final allItemsResult = await db.rawQuery("""
@@ -578,7 +578,7 @@ VALUES
     }
   }
 
-  Future<List<Item>> getItemSearchMatches({
+  Future<List<NonRoot>> getItemSearchMatches({
     required String searchString,
   }) async {
     throw UnimplementedError();

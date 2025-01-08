@@ -14,7 +14,8 @@ class ThingsMapApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Things Map',
+      debugShowCheckedModeBanner: false,
+      title: 'Unforget',
       theme: ThemeData(
         useMaterial3: true,
       ),

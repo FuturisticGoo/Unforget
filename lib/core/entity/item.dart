@@ -21,19 +21,19 @@ mixin ItemWithChildren {
   List<int> get children;
 }
 
-class Root extends Item with EquatableMixin, ItemWithChildren {
-  @override
-  final List<int> children;
-  const Root({
-    required this.children,
-    required super.lastUpdated,
-  }) : super(id: 0);
-  @override
-  List<Object?> get props => [
-        ...super.props,
-        children,
-      ];
-}
+// class Root extends Item with EquatableMixin, ItemWithChildren {
+//   @override
+//   final List<int> children;
+//   const Root({
+//     required this.children,
+//     required super.lastUpdated,
+//   }) : super(id: 0);
+//   @override
+//   List<Object?> get props => [
+//         ...super.props,
+//         children,
+//       ];
+// }
 
 sealed class NonRoot extends Item with EquatableMixin {
   final int parentId;

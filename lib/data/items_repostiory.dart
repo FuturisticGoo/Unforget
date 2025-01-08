@@ -7,8 +7,8 @@ import 'package:things_map/data/app_datasource.dart';
 import 'package:things_map/data/items_datasource.dart';
 
 abstract class ItemsRepository {
-  /// Get all [Item]s from the database
-  Future<Result<List<Item>>> getAllItems();
+  /// Get all [NonRoot]s from the database
+  Future<Result<List<NonRoot>>> getAllItems();
 
   /// Save a [NewItem] and return the saved [Item]'s id
   Future<Result<int>> saveOrModifyItem({
@@ -23,8 +23,8 @@ abstract class ItemsRepository {
     required List<XFile> images,
   });
 
-  /// Get a list of [Item]s with similar name or descriptions
-  Future<Result<List<Item>>> getSearchResult({
+  /// Get a list of [NonRoot]s with similar name or descriptions
+  Future<Result<List<NonRoot>>> getSearchResult({
     required String searchString,
   });
 
@@ -42,7 +42,7 @@ class ItemsRepositoryImpl implements ItemsRepository {
   });
 
   @override
-  Future<Result<List<Item>>> getAllItems() async {
+  Future<Result<List<NonRoot>>> getAllItems() async {
     try {
       final result = await itemsDatasource.getAllItems();
       return Result.value(result);
@@ -131,7 +131,7 @@ class ItemsRepositoryImpl implements ItemsRepository {
   }
 
   @override
-  Future<Result<List<Item>>> getSearchResult({
+  Future<Result<List<NonRoot>>> getSearchResult({
     required String searchString,
   }) async {
     if (itemsDatasource is ItemsDataSourceSQLite) {
