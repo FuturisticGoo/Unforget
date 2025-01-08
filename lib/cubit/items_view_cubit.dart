@@ -1,4 +1,5 @@
 import 'package:async/async.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:things_map/core/constants.dart';
 import 'package:things_map/core/entity/item.dart';
@@ -108,7 +109,15 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           items: allItems,
           id: id,
         );
-        print(foundItem);
+        List<String> imagePaths = [];
+        if (foundItem != null) {
+          final imagesResult = await thingsRepository.getImagesForItem(
+            itemId: foundItem.id,
+          );
+          if (imagesResult case ValueResult(:final value)) {
+            imagePaths = value;
+          }
+        }
         switch (foundItem) {
           case null:
             emit(ItemsViewError(error: "Cant find item"));
@@ -136,15 +145,10 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
               ),
               nicePath: _getNicePathToId(
                     allItems: allItems,
-                    id: foundItem.id,
+                    id: foundId,
                   ) ??
                   "null",
-              currentItemImagePaths: [
-                "/home/fgoo/Downloads/4.1.06.png",
-                "/home/fgoo/Downloads/control",
-                "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
-                "/home/fgoo/Downloads/Other Stuff/trolled.webp",
-              ],
+              currentItemImagePaths: imagePaths,
             );
 
             emit((straightToEditMode) ? newState.editItem : newState);
@@ -158,12 +162,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
                     id: foundItem.id,
                   ) ??
                   "null",
-              currentItemImagePaths: [
-                "/home/fgoo/Downloads/4.1.06.png",
-                "/home/fgoo/Downloads/control",
-                "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
-                "/home/fgoo/Downloads/Other Stuff/trolled.webp",
-              ],
+              currentItemImagePaths: imagePaths,
             );
             emit(
               (straightToEditMode) ? newState.editItem : newState,
@@ -174,9 +173,46 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     }
   }
 
+  Future<void> addImage({
+    required List<XFile> imagesToAdd,
+  }) async {
+    switch (state) {
+      case ItemsViewEdit(
+          :final allItems,
+          :final allOwners,
+          :final parentId,
+          :final nicePath,
+          :final currentItemImagePaths,
+          :final newImages,
+          :final editingItem,
+        ):
+        emit(
+          ItemsViewEdit(
+            editingItem: editingItem,
+            allItems: allItems,
+            allOwners: allOwners,
+            parentId: parentId,
+            nicePath: nicePath,
+            currentItemImagePaths: [
+              ...currentItemImagePaths,
+              ...imagesToAdd.map(
+                (e) => e.path,
+              )
+            ],
+            newImages: [
+              ...newImages,
+              ...imagesToAdd,
+            ],
+          ),
+        );
+      default:
+        break;
+    }
+  }
+
   Future<void> saveItem({
     required NewItem newItem,
-    NonRoot? oldItem,
+    List<XFile>? images,
   }) async {
     // switch (state) {
     // case ItemsViewEdit():
@@ -186,6 +222,12 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
       case ErrorResult(:final error):
         emit(ItemsViewError(error: error));
       case ValueResult(:final value):
+        if (images != null) {
+          final imageResult = await thingsRepository.saveImages(
+            itemId: value,
+            images: images,
+          );
+        }
         await _loadThings();
         await goToItemWithId(id: value, straightToEditMode: false);
     }
@@ -213,12 +255,14 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
             parentId: rootId,
             nicePath: "/",
             editingItem: editingItem,
+            currentItemImagePaths: [],
           ),
         );
       case ItemsViewNonTopLevel(
           :final allItems,
           :final allOwners,
           :final currentItem,
+          :final currentItemImagePaths,
         ):
         emit(
           ItemsViewEdit(
@@ -231,6 +275,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
                 ) ??
                 "",
             editingItem: editingItem,
+            currentItemImagePaths: currentItemImagePaths,
           ),
         );
       default:

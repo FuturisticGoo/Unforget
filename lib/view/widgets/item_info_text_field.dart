@@ -36,6 +36,7 @@ class _ItemInfoTextFormFieldState extends State<ItemInfoTextFormField> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: TextFormField(
+        key: Key("${widget.label}:${widget.readOnly}"),
         initialValue: widget.controller == null ? widget.initialValue : null,
         controller: widget.controller,
         readOnly: widget.readOnly,

@@ -45,6 +45,8 @@ class ItemsViewEdit extends ItemsViewLoaded with ItemsViewCanGoUpward {
   final int parentId;
   @override
   final String nicePath;
+  final List<String> currentItemImagePaths;
+  final List<XFile> newImages;
 
   /// If this [editingItem] is null, then it means adding a new item
   final NonRoot? editingItem;
@@ -53,6 +55,8 @@ class ItemsViewEdit extends ItemsViewLoaded with ItemsViewCanGoUpward {
     required super.allOwners,
     required this.parentId,
     required this.nicePath,
+    required this.currentItemImagePaths,
+    this.newImages = const [],
     this.editingItem,
   });
   @override
@@ -60,6 +64,8 @@ class ItemsViewEdit extends ItemsViewLoaded with ItemsViewCanGoUpward {
         ...super.props,
         parentId,
         nicePath,
+        currentItemImagePaths,
+        newImages,
         editingItem,
       ];
 }
@@ -141,6 +147,7 @@ extension _EditItem on ItemsViewNonTopLevel {
       editingItem: currentItem,
       parentId: parentId,
       nicePath: nicePath,
+      currentItemImagePaths: currentItemImagePaths,
     );
   }
 }

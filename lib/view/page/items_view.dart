@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:things_map/core/constants.dart';
+
 import 'package:things_map/core/entity/item.dart';
 import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/core/entity/owner.dart';
 import 'package:things_map/core/init_setup.dart';
 import 'package:things_map/cubit/items_view_cubit.dart';
-import 'package:things_map/view/widgets/image_tile.dart';
-import 'package:things_map/view/widgets/item_info_text_field.dart';
+import 'package:things_map/view/widgets/child_item.dart';
+import 'package:things_map/view/widgets/item_info_expansion.dart';
 import 'package:things_map/view/widgets/list_heading.dart';
-import 'package:things_map/view/widgets/owners_chip.dart';
+import 'package:things_map/view/widgets/select_image.dart';
 
 class ItemsView extends StatefulWidget {
   const ItemsView({super.key});
@@ -25,7 +25,6 @@ class _ItemsViewState extends State<ItemsView> {
   final _notesController = TextEditingController();
   bool _canContainItems = true;
   final _formKey = GlobalKey<FormState>();
-  final _menuController = MenuController();
   Map<Owner, bool> _ownerSelection = {};
 
   @override
@@ -125,157 +124,50 @@ class _ItemsViewState extends State<ItemsView> {
                           ItemsViewNonTopLevel(currentItem: NonRoot? item) ||
                           ItemsViewEdit(editingItem: NonRoot? item) =>
                             [
-                              ExpansionTile(
-                                // childrenPadding: EdgeInsets.zero,
-                                key: Key(
-                                    "Item:${item?.id ?? -1}${state.runtimeType}"),
-                                shape: Border(),
-                                title: Text(
-                                  item?.name ?? "New Item",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary,
-                                      ),
-                                ),
-                                initiallyExpanded: state is ItemsViewEdit,
-                                children: [
-                                  Visibility(
-                                    visible: (state
-                                            is ItemsViewInternalLevel) &&
-                                        state.currentItemImagePaths.isNotEmpty,
-                                    child:
-                                        //  AspectRatio(
-                                        //   aspectRatio: 1,
-                                        //   child:
-                                        SizedBox(
-                                      width: MediaQuery.sizeOf(context).width *
-                                          0.9,
-                                      height: MediaQuery.sizeOf(context).width *
-                                          0.5,
-                                      child: ImageTile(
-                                        imagePaths:
-                                            (state is ItemsViewInternalLevel)
-                                                ? state.currentItemImagePaths
-                                                : [],
-                                      ),
-                                    ),
-                                    // ),
-                                  ),
-                                  ItemInfoTextFormField(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Name",
-                                    initialValue: item?.name ?? "",
-                                    controller: _nameController,
-                                    validator: (string) {
-                                      if (string == null || string.isEmpty) {
-                                        return "Enter a valid name";
-                                      } else {
-                                        return null;
-                                      }
-                                    },
-                                  ),
-                                  ItemInfoTextFormField(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Price",
-                                    initialValue: item?.price?.toString() ??
-                                        ((state is ItemsViewEdit)
-                                            ? ""
-                                            : "Unknown"),
-                                    controller: _priceController,
-                                    validator: (string) {
-                                      if (string == null || string.isEmpty) {
-                                        return null;
-                                      } else {
-                                        final price = BigInt.tryParse(string);
-                                        return (price == null)
-                                            ? "Invalid price"
-                                            : null;
-                                      }
-                                    },
-                                  ),
-                                  ItemInfoTextFormField(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Quantity",
-                                    initialValue: switch (item?.quantity) {
-                                      null => "1",
-                                      double() =>
-                                        item!.quantity.toStringAsFixed(
-                                          (item.quantity.toInt() ==
-                                                  item.quantity)
-                                              ? 0
-                                              : 2,
-                                        ),
-                                    },
-                                    controller: _quantityController,
-                                    validator: (string) {
-                                      final quantity =
-                                          double.tryParse(string ?? "");
-                                      if (string == null ||
-                                          string.isEmpty ||
-                                          quantity == null ||
-                                          quantity <= 0) {
-                                        return "Enter a valid quantity";
-                                      } else {
-                                        return null;
-                                      }
-                                    },
-                                  ),
-                                  OwnersChip(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Owners",
-                                    ownerSelectionMap: _ownerSelection,
-                                    onSelected: (owner, selected) {
-                                      setState(() {
-                                        _ownerSelection[owner] = selected;
-                                      });
-                                    },
-                                    onDeleted: (owner) {
-                                      setState(() {
-                                        _ownerSelection.remove(owner);
-                                      });
-                                    },
-                                    onNew: (owner) {
-                                      setState(() {
-                                        _ownerSelection[owner] = true;
-                                      });
-                                      context
-                                          .read<ItemsViewCubit>()
-                                          .addNewOwner(owner: owner);
-                                    },
-                                  ),
-                                  ItemInfoTextFormField(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Notes",
-                                    initialValue:
-                                        item?.extraNotes?.toString() ??
-                                            ((state is ItemsViewEdit)
-                                                ? ""
-                                                : "<Blank>"),
-                                    controller: _notesController,
-                                  ),
-                                  SizedBox(
-                                    height: 8,
-                                  ),
-                                  Visibility(
-                                    visible: state is ItemsViewEdit,
-                                    child: ListTile(
-                                      title: Text("Can contain items"),
-                                      trailing: Switch(
-                                        value: _canContainItems,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _canContainItems = value;
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              ItemInfoExpansion(
+                                item: item,
+                                state: state,
+                                formKey: _formKey,
+                                nameController: _nameController,
+                                priceController: _priceController,
+                                quantityController: _quantityController,
+                                notesController: _notesController,
+                                canContainItems: _canContainItems,
+                                ownerSelection: _ownerSelection,
+                                isReadOnly: state is! ItemsViewEdit,
+                                onItemTypeChange: (canContainItems) {
+                                  setState(() {
+                                    _canContainItems = canContainItems;
+                                  });
+                                },
+                                onSelectOwner: (owner, selected) {
+                                  setState(() {
+                                    _ownerSelection[owner] = selected;
+                                  });
+                                },
+                                onDeleteOwner: (owner) {
+                                  setState(() {
+                                    _ownerSelection.remove(owner);
+                                  });
+                                },
+                                onNewOwner: (owner) {
+                                  setState(() {
+                                    _ownerSelection[owner] = true;
+                                  });
+                                  context
+                                      .read<ItemsViewCubit>()
+                                      .addNewOwner(owner: owner);
+                                },
+                                onAddImageTap: () async {
+                                  final images = await getImages();
+                                  if (images != null && context.mounted) {
+                                    await context
+                                        .read<ItemsViewCubit>()
+                                        .addImage(
+                                          imagesToAdd: images,
+                                        );
+                                  }
+                                },
                               ),
                             ],
                         },
@@ -288,181 +180,8 @@ class _ItemsViewState extends State<ItemsView> {
                               ListHeading("Contains"),
                               ...children.map(
                                 (item) {
-                                  // return MenuAnchor(
-                                  //   controller: _menuController,
-                                  //   menuChildren: [
-                                  //     MenuItemButton(
-                                  //       onPressed: () async {
-                                  //         //TODO; Move
-                                  //       },
-                                  //       child: const Row(
-                                  //         children: [
-                                  //           Icon(Icons.edit),
-                                  //           SizedBox(
-                                  //             width: 5,
-                                  //           ),
-                                  //           Text("Edit"),
-                                  //         ],
-                                  //       ),
-                                  //     ),
-                                  //     MenuItemButton(
-                                  //       onPressed: () async {
-                                  //         // final shouldDelete =
-                                  //         //     await confirmDeletionDialog(
-                                  //         //         context);
-                                  //         // if (shouldDelete == true) {
-                                  //         // TODO: delet
-                                  //         // }
-                                  //       },
-                                  //       child: const Row(
-                                  //         children: [
-                                  //           Icon(Icons.delete),
-                                  //           SizedBox(
-                                  //             width: 5,
-                                  //           ),
-                                  //           Text("Delete"),
-                                  //         ],
-                                  //       ),
-                                  //     ),
-                                  //   ],
-                                  // child:
-                                  return GestureDetector(
-                                    child: ListTile(
-                                      title: Text(item.name),
-                                      trailing: Icon(Icons.arrow_forward),
-                                      onTap: () {
-                                        context
-                                            .read<ItemsViewCubit>()
-                                            .goToItemWithId(
-                                              id: item.id,
-                                              straightToEditMode: false,
-                                            );
-                                      },
-
-                                      // ),
-                                    ),
-                                    onLongPressStart: (details) {
-                                      showMenu(
-                                        context: context,
-                                        position: RelativeRect.fromLTRB(
-                                          details.globalPosition.dx,
-                                          details.globalPosition.dy,
-                                          details.globalPosition.dx + 40,
-                                          details.globalPosition.dy + 15,
-                                        ),
-                                        items: [
-                                          PopupMenuItem(
-                                            onTap: () {
-                                              final snack = SnackBar(
-                                                content: Row(
-                                                  children: [
-                                                    Text(
-                                                        "Copying ${item.name}"),
-                                                    Spacer(),
-                                                    IconButton(
-                                                      onPressed: () async {
-                                                        final latestState = context
-                                                            .read<
-                                                                ItemsViewCubit>()
-                                                            .state;
-                                                        switch (latestState) {
-                                                          case ItemsViewNonTopLevel(
-                                                                :final currentItem
-                                                              )
-                                                              when currentItem
-                                                                      .id !=
-                                                                  item.id:
-                                                            await context
-                                                                .read<
-                                                                    ItemsViewCubit>()
-                                                                .saveItem(
-                                                                  newItem: NewItem
-                                                                      .fromNonRoot(
-                                                                    item: item,
-                                                                    parentId:
-                                                                        currentItem
-                                                                            .id,
-                                                                  ),
-                                                                  oldItem: item,
-                                                                );
-                                                            if (context
-                                                                .mounted) {
-                                                              ScaffoldMessenger
-                                                                  .of(
-                                                                context,
-                                                              ).clearSnackBars();
-                                                            }
-
-                                                          case ItemsViewTopLevel():
-                                                            await context
-                                                                .read<
-                                                                    ItemsViewCubit>()
-                                                                .saveItem(
-                                                                  newItem: NewItem
-                                                                      .fromNonRoot(
-                                                                    item: item,
-                                                                    parentId:
-                                                                        rootId,
-                                                                  ),
-                                                                  oldItem: item,
-                                                                );
-                                                            if (context
-                                                                .mounted) {
-                                                              ScaffoldMessenger
-                                                                  .of(
-                                                                context,
-                                                              ).clearSnackBars();
-                                                            }
-                                                          default:
-                                                            break;
-                                                        }
-                                                      },
-                                                      icon: Icon(
-                                                        Icons.paste,
-                                                        color: Theme.of(context)
-                                                            .buttonTheme
-                                                            .colorScheme
-                                                            ?.onPrimary,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                duration: Duration(days: 365),
-                                              );
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(snack);
-                                            },
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.cut),
-                                                SizedBox(
-                                                  width: 5,
-                                                ),
-                                                Text("Cut"),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            onTap: () async {
-                                              await context
-                                                  .read<ItemsViewCubit>()
-                                                  .deleteItem(
-                                                    item: item,
-                                                  );
-                                            },
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.delete),
-                                                SizedBox(
-                                                  width: 5,
-                                                ),
-                                                Text("Delete"),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
+                                  return ChildItem(
+                                    item: item,
                                   );
                                 },
                               ),
@@ -496,6 +215,7 @@ class _ItemsViewState extends State<ItemsView> {
               case ItemsViewEdit(
                   :final parentId,
                   :final editingItem,
+                  :final newImages,
                 ):
                 return FloatingActionButton.extended(
                   onPressed: () async {
@@ -520,10 +240,13 @@ class _ItemsViewState extends State<ItemsView> {
                             ? ItemType.internal
                             : ItemType.leaf,
                       );
-                      await context.read<ItemsViewCubit>().saveItem(
-                            newItem: newItem,
-                            oldItem: editingItem,
-                          );
+
+                      if (context.mounted) {
+                        await context.read<ItemsViewCubit>().saveItem(
+                              newItem: newItem,
+                              images: newImages,
+                            );
+                      }
                     }
                   },
                   icon: Icon(Icons.save),

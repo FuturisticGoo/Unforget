@@ -1,7 +1,9 @@
 import 'package:async/async.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:things_map/core/entity/item.dart';
 import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/core/entity/owner.dart';
+import 'package:things_map/data/app_datasource.dart';
 import 'package:things_map/data/items_datasource.dart';
 
 abstract class ItemsRepository {
@@ -11,6 +13,14 @@ abstract class ItemsRepository {
   /// Save a [NewItem] and return the saved [Item]'s id
   Future<Result<int>> saveOrModifyItem({
     required NewItem newItem,
+    List<String>? imagePaths,
+  });
+  Future<Result<List<String>>> getImagesForItem({
+    required int itemId,
+  });
+  Future<Result<void>> saveImages({
+    required int itemId,
+    required List<XFile> images,
   });
 
   /// Get a list of [Item]s with similar name or descriptions
@@ -25,8 +35,10 @@ abstract class ItemsRepository {
 
 class ItemsRepositoryImpl implements ItemsRepository {
   final ItemsDatasource itemsDatasource;
+  final AppDataSource appDataSource;
   ItemsRepositoryImpl({
     required this.itemsDatasource,
+    required this.appDataSource,
   });
 
   @override
@@ -42,6 +54,7 @@ class ItemsRepositoryImpl implements ItemsRepository {
   @override
   Future<Result<int>> saveOrModifyItem({
     required NewItem newItem,
+    List<String>? imagePaths,
   }) async {
     try {
       final id = await itemsDatasource.saveOrModifyItem(
@@ -77,6 +90,40 @@ class ItemsRepositoryImpl implements ItemsRepository {
   Future<Result<void>> saveOwner({required Owner owner}) async {
     try {
       await itemsDatasource.saveNewOwner(owner: owner);
+      return Result.value(null);
+    } catch (error, stackTrace) {
+      return Result.error(error, stackTrace);
+    }
+  }
+
+  @override
+  Future<Result<List<String>>> getImagesForItem({
+    required int itemId,
+  }) async {
+    try {
+      final imagePaths = await itemsDatasource.getImagePathsForItem(
+        itemId: itemId,
+      );
+      return Result.value(imagePaths);
+    } catch (error, stackTrace) {
+      return Result.error(error, stackTrace);
+    }
+  }
+
+  @override
+  Future<Result<void>> saveImages({
+    required int itemId,
+    required List<XFile> images,
+  }) async {
+    try {
+      final paths = await appDataSource.saveImage(
+        itemId: itemId,
+        images: images,
+      );
+      await itemsDatasource.saveImagePathsForItem(
+        itemId: itemId,
+        imagePaths: paths,
+      );
       return Result.value(null);
     } catch (error, stackTrace) {
       return Result.error(error, stackTrace);

@@ -20,6 +20,13 @@ abstract class ItemsDatasource {
   Future<void> saveNewOwner({
     required Owner owner,
   });
+  Future<List<String>> getImagePathsForItem({
+    required int itemId,
+  });
+  Future<void> saveImagePathsForItem({
+    required int itemId,
+    required List<String> imagePaths,
+  });
 }
 
 class ItemsDataSourceSQLite implements ItemsDatasource {
@@ -525,6 +532,50 @@ FROM
         return Owner(name: entry[OwnersTable.name.colName].toString());
       },
     ).toList();
+  }
+
+  @override
+  Future<List<String>> getImagePathsForItem({
+    required int itemId,
+  }) async {
+    final pathsResult = await db.rawQuery(
+      """
+SELECT
+  ${ItemPictures.pictureFileName.colName}
+FROM
+  ${ItemPictures.tableName}
+WHERE
+  ${ItemPictures.itemId.colName}=?
+    """,
+      [itemId],
+    );
+    return pathsResult.map(
+      (row) {
+        return row[ItemPictures.pictureFileName.colName] as String;
+      },
+    ).toList();
+  }
+
+  @override
+  Future<void> saveImagePathsForItem({
+    required int itemId,
+    required List<String> imagePaths,
+  }) async {
+    for (final path in imagePaths) {
+      await db.rawInsert(
+        """
+INSERT INTO 
+  ${ItemPictures.tableName}
+  (
+    ${ItemPictures.itemId.colName},
+    ${ItemPictures.pictureFileName.colName}
+  )
+VALUES
+  (?, ?)
+    """,
+        [itemId, path],
+      );
+    }
   }
 
   Future<List<Item>> getItemSearchMatches({
