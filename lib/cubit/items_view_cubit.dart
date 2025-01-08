@@ -1,5 +1,7 @@
 import 'package:async/async.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:text_search/text_search.dart';
 import 'package:things_map/core/constants.dart';
 import 'package:things_map/core/entity/item.dart';
 import 'package:equatable/equatable.dart';
@@ -10,17 +12,18 @@ import 'package:path/path.dart' as p;
 part 'items_view_state.dart';
 
 class ItemsViewCubit extends Cubit<ItemsViewState> {
-  final ItemsRepository thingsRepository;
+  final ItemsRepository itemsRepository;
+  List<TextSearchItem<NonRoot>>? _searchItemsCache;
   ItemsViewCubit({
-    required this.thingsRepository,
+    required this.itemsRepository,
   }) : super(ItemsViewInitial()) {
     _loadThings();
   }
 
   Future<void> _loadThings() async {
     emit(ItemsViewLoading());
-    final itemsResult = await thingsRepository.getAllItems();
-    final ownersResult = await thingsRepository.getAllOwners();
+    final itemsResult = await itemsRepository.getAllItems();
+    final ownersResult = await itemsRepository.getAllOwners();
     switch ((itemsResult, ownersResult)) {
       case (_, ErrorResult(:final error, :final stackTrace)):
       case (ErrorResult(:final error, :final stackTrace), _):
@@ -34,6 +37,11 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           ValueResult(value: final allItems),
           ValueResult(value: final allOwners)
         ):
+        _searchItemsCache = allItems.map(
+          (item) {
+            return TextSearchItem.fromTerms(item, [item.name]);
+          },
+        ).toList();
         emit(
           ItemsViewTopLevel(
             allItems: allItems,
@@ -66,7 +74,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     final currentItem = binarySearchItemWithId(items: allItems, id: id);
     switch (currentItem) {
       case null:
-      case Root():
+        // case Root():
         return "/";
       case NonRoot(:final parentId):
         final parentNicePath = _getNicePathToId(
@@ -108,20 +116,29 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
           items: allItems,
           id: id,
         );
+        List<String> imagePaths = [];
+        if (foundItem != null) {
+          final imagesResult = await itemsRepository.getImagesForItem(
+            itemId: foundItem.id,
+          );
+          if (imagesResult case ValueResult(:final value)) {
+            imagePaths = value;
+          }
+        }
         switch (foundItem) {
           case null:
             emit(ItemsViewError(error: "Cant find item"));
-          case Root(id: final foundId):
-            emit(
-              ItemsViewTopLevel(
-                allItems: allItems,
-                allOwners: allOwners,
-                children: _getChildrenOfItem(
-                  allItems: allItems,
-                  currentId: foundId,
-                ),
-              ),
-            );
+          // case Root(id: final foundId):
+          //   emit(
+          //     ItemsViewTopLevel(
+          //       allItems: allItems,
+          //       allOwners: allOwners,
+          //       children: _getChildrenOfItem(
+          //         allItems: allItems,
+          //         currentId: foundId,
+          //       ),
+          //     ),
+          //   );
           case InternalItem(
               id: final foundId,
             ):
@@ -135,15 +152,10 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
               ),
               nicePath: _getNicePathToId(
                     allItems: allItems,
-                    id: foundItem.id,
+                    id: foundId,
                   ) ??
                   "null",
-              currentItemImagePaths: [
-                "/home/fgoo/Downloads/4.1.06.png",
-                "/home/fgoo/Downloads/control",
-                "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
-                "/home/fgoo/Downloads/Other Stuff/trolled.webp",
-              ],
+              currentItemImagePaths: imagePaths,
             );
 
             emit((straightToEditMode) ? newState.editItem : newState);
@@ -157,12 +169,7 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
                     id: foundItem.id,
                   ) ??
                   "null",
-              currentItemImagePaths: [
-                "/home/fgoo/Downloads/4.1.06.png",
-                "/home/fgoo/Downloads/control",
-                "/home/fgoo/Downloads/Other Stuff/always_gotta_stop_when_I_see_this.webp",
-                "/home/fgoo/Downloads/Other Stuff/trolled.webp",
-              ],
+              currentItemImagePaths: imagePaths,
             );
             emit(
               (straightToEditMode) ? newState.editItem : newState,
@@ -173,30 +180,70 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
     }
   }
 
-  Future<void> saveItem({
-    required NewItem newItem,
-    NonRoot? oldItem,
+  Future<void> addImage({
+    required List<XFile> imagesToAdd,
   }) async {
     switch (state) {
-      case ItemsViewEdit():
-        final saveResult = await thingsRepository.saveOrModifyItem(
-          newItem: newItem,
-          oldItem: oldItem,
+      case ItemsViewEdit(
+          :final allItems,
+          :final allOwners,
+          :final parentId,
+          :final nicePath,
+          :final currentItemImagePaths,
+          :final newImages,
+          :final editingItem,
+        ):
+        emit(
+          ItemsViewEdit(
+            editingItem: editingItem,
+            allItems: allItems,
+            allOwners: allOwners,
+            parentId: parentId,
+            nicePath: nicePath,
+            currentItemImagePaths: [
+              ...currentItemImagePaths,
+              ...imagesToAdd.map(
+                (e) => e.path,
+              )
+            ],
+            newImages: [
+              ...newImages,
+              ...imagesToAdd,
+            ],
+          ),
         );
-        switch (saveResult) {
-          case ErrorResult(:final error):
-            emit(ItemsViewError(error: error));
-          case ValueResult(:final value):
-            await _loadThings();
-            await goToItemWithId(id: value, straightToEditMode: false);
-        }
       default:
         break;
     }
   }
 
+  Future<void> saveItem({
+    required NewItem newItem,
+    List<XFile>? images,
+  }) async {
+    // switch (state) {
+    // case ItemsViewEdit():
+    final saveResult = await itemsRepository.saveOrModifyItem(newItem: newItem);
+    switch (saveResult) {
+      case ErrorResult(:final error):
+        emit(ItemsViewError(error: error));
+      case ValueResult(:final value):
+        if (images != null) {
+          final imageResult = await itemsRepository.saveImages(
+            itemId: value,
+            images: images,
+          );
+        }
+        await _loadThings();
+        await goToItemWithId(id: value, straightToEditMode: false);
+    }
+    //   default:
+    //     break;
+    // }
+  }
+
   Future<void> addNewOwner({required Owner owner}) async {
-    await thingsRepository.saveOwner(owner: owner);
+    await itemsRepository.saveOwner(owner: owner);
   }
 
   Future<void> showAddOrEditItem({
@@ -214,12 +261,14 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
             parentId: rootId,
             nicePath: "/",
             editingItem: editingItem,
+            currentItemImagePaths: [],
           ),
         );
       case ItemsViewNonTopLevel(
           :final allItems,
           :final allOwners,
           :final currentItem,
+          :final currentItemImagePaths,
         ):
         emit(
           ItemsViewEdit(
@@ -232,11 +281,74 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
                 ) ??
                 "",
             editingItem: editingItem,
+            currentItemImagePaths: currentItemImagePaths,
           ),
         );
       default:
         break;
     }
+  }
+
+  Future<void> deleteItem({required NonRoot item}) async {
+    final result = await itemsRepository.deleteItem(itemId: item.id);
+    switch (result) {
+      case ValueResult():
+        await _loadThings();
+        await goToItemWithId(
+          id: item.parentId,
+          straightToEditMode: false,
+        );
+      case ErrorResult(:final error, :final stackTrace):
+        emit(
+          ItemsViewError(
+            error: error,
+            stackTrace: stackTrace,
+          ),
+        );
+    }
+  }
+
+  Future<void> searchForItem({required String searchTerm}) async {
+    switch (state) {
+      case ItemsViewLoaded(
+          :final allItems,
+          :final allOwners,
+        ):
+        emit(
+          ItemsViewSearch(
+            allItems: allItems,
+            allOwners: allOwners,
+            searchResults: searchTerm.isEmpty
+                ? []
+                : await _searchItemsForString(
+                    allItems: allItems,
+                    searchTerm: searchTerm,
+                  ),
+            lastItemId: switch (state) {
+              ItemsViewNonTopLevel(:final currentItem) => currentItem.id,
+              ItemsViewSearch(:final lastItemId) => lastItemId,
+              _ => rootId,
+            },
+          ),
+        );
+      default:
+        break;
+    }
+  }
+
+  Future<List<NonRoot>> _searchItemsForString({
+    required List<NonRoot> allItems,
+    required String searchTerm,
+  }) async {
+    _searchItemsCache ??= _searchItemsCache = allItems.map(
+      (item) {
+        return TextSearchItem.fromTerms(item, [item.name]);
+      },
+    ).toList();
+
+    final searcher = TextSearch(_searchItemsCache!);
+    final result = searcher.fastSearch(searchTerm);
+    return result;
   }
 }
 

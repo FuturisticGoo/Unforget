@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'package:things_map/core/entity/item.dart';
 import 'package:things_map/core/entity/new_item.dart';
 import 'package:things_map/core/entity/owner.dart';
 import 'package:things_map/core/init_setup.dart';
 import 'package:things_map/cubit/items_view_cubit.dart';
-import 'package:things_map/view/widgets/image_tile.dart';
-import 'package:things_map/view/widgets/item_info_text_field.dart';
+import 'package:things_map/view/widgets/child_item.dart';
+import 'package:things_map/view/widgets/item_info_expansion.dart';
 import 'package:things_map/view/widgets/list_heading.dart';
-import 'package:things_map/view/widgets/owners_chip.dart';
+import 'package:things_map/view/widgets/select_image.dart';
 
 class ItemsView extends StatefulWidget {
   const ItemsView({super.key});
@@ -18,6 +19,7 @@ class ItemsView extends StatefulWidget {
 }
 
 class _ItemsViewState extends State<ItemsView> {
+  final _searchTextController = TextEditingController();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController();
@@ -28,6 +30,7 @@ class _ItemsViewState extends State<ItemsView> {
 
   @override
   void dispose() {
+    _searchTextController.dispose();
     _nameController.dispose();
     _priceController.dispose();
     _quantityController.dispose();
@@ -38,10 +41,36 @@ class _ItemsViewState extends State<ItemsView> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => ItemsViewCubit(thingsRepository: sl()),
+      create: (context) => ItemsViewCubit(itemsRepository: sl()),
       child: Scaffold(
         appBar: AppBar(
-          title: Text("Thing Map"),
+          title: Text("Unforget"),
+          actions: [
+            BlocBuilder<ItemsViewCubit, ItemsViewState>(
+              builder: (context, state) {
+                switch (state) {
+                  case ItemsViewLoaded():
+                    return IconButton(
+                      onPressed: () async {
+                        if (state case ItemsViewSearch(:final lastItemId)) {
+                          context.read<ItemsViewCubit>().goToItemWithId(
+                                id: lastItemId,
+                                straightToEditMode: false,
+                              );
+                        } else {
+                          await context
+                              .read<ItemsViewCubit>()
+                              .searchForItem(searchTerm: "");
+                        }
+                      },
+                      icon: Icon(Icons.search),
+                    );
+                  default:
+                    return Container();
+                }
+              },
+            ),
+          ],
         ),
         body: BlocConsumer<ItemsViewCubit, ItemsViewState>(
           listener: (context, state) {
@@ -83,7 +112,64 @@ class _ItemsViewState extends State<ItemsView> {
                 return ErrorWidget.withDetails(
                   message: "$error\n$stackTrace",
                 );
-
+              case ItemsViewSearch(
+                  :final searchResults,
+                ):
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      TextField(
+                        autofocus: true,
+                        controller: _searchTextController,
+                        decoration: InputDecoration(
+                          label: Text("Search"),
+                          suffixIcon: IconButton(
+                            onPressed: () {
+                              _searchTextController.clear();
+                              context
+                                  .read<ItemsViewCubit>()
+                                  .searchForItem(searchTerm: "");
+                            },
+                            icon: Icon(
+                              Icons.close,
+                            ),
+                          ),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) async {
+                          context.read<ItemsViewCubit>().searchForItem(
+                                searchTerm: value,
+                              );
+                        },
+                      ),
+                      SizedBox(
+                        height: 10,
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: searchResults.length,
+                          itemBuilder: (context, index) {
+                            return ListTile(
+                              title: Text(
+                                searchResults[index].name,
+                              ),
+                              onTap: () async {
+                                _searchTextController.clear();
+                                await context
+                                    .read<ItemsViewCubit>()
+                                    .goToItemWithId(
+                                      id: searchResults[index].id,
+                                      straightToEditMode: false,
+                                    );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
               case ItemsViewLoaded():
                 return Padding(
                   padding: const EdgeInsets.all(8.0),
@@ -120,160 +206,54 @@ class _ItemsViewState extends State<ItemsView> {
                           ItemsViewTopLevel() => [
                               ListHeading("Top Level"),
                             ],
+                          ItemsViewSearch() => [],
                           ItemsViewNonTopLevel(currentItem: NonRoot? item) ||
                           ItemsViewEdit(editingItem: NonRoot? item) =>
                             [
-                              ExpansionTile(
-                                // childrenPadding: EdgeInsets.zero,
-                                key: Key(
-                                    "Item:${item?.id ?? -1}${state.runtimeType}"),
-                                shape: Border(),
-                                title: Text(
-                                  item?.name ?? "New Item",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary,
-                                      ),
-                                ),
-                                initiallyExpanded: state is ItemsViewEdit,
-                                children: [
-                                  Visibility(
-                                    visible: (state
-                                            is ItemsViewInternalLevel) &&
-                                        state.currentItemImagePaths.isNotEmpty,
-                                    child:
-                                        //  AspectRatio(
-                                        //   aspectRatio: 1,
-                                        //   child:
-                                        SizedBox(
-                                      width: MediaQuery.sizeOf(context).width *
-                                          0.9,
-                                      height: MediaQuery.sizeOf(context).width *
-                                          0.5,
-                                      child: ImageTile(
-                                        imagePaths:
-                                            (state is ItemsViewInternalLevel)
-                                                ? state.currentItemImagePaths
-                                                : [],
-                                      ),
-                                    ),
-                                    // ),
-                                  ),
-                                  ItemInfoTextFormField(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Name",
-                                    initialValue: item?.name ?? "",
-                                    controller: _nameController,
-                                    validator: (string) {
-                                      if (string == null || string.isEmpty) {
-                                        return "Enter a valid name";
-                                      } else {
-                                        return null;
-                                      }
-                                    },
-                                  ),
-                                  ItemInfoTextFormField(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Price",
-                                    initialValue: item?.price?.toString() ??
-                                        ((state is ItemsViewEdit)
-                                            ? ""
-                                            : "Unknown"),
-                                    controller: _priceController,
-                                    validator: (string) {
-                                      if (string == null || string.isEmpty) {
-                                        return null;
-                                      } else {
-                                        final price = BigInt.tryParse(string);
-                                        return (price == null)
-                                            ? "Invalid price"
-                                            : null;
-                                      }
-                                    },
-                                  ),
-                                  ItemInfoTextFormField(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Quantity",
-                                    initialValue: switch (item?.quantity) {
-                                      null => "1",
-                                      double() =>
-                                        item!.quantity.toStringAsFixed(
-                                          (item.quantity.toInt() ==
-                                                  item.quantity)
-                                              ? 0
-                                              : 2,
-                                        ),
-                                    },
-                                    controller: _quantityController,
-                                    validator: (string) {
-                                      final quantity =
-                                          double.tryParse(string ?? "");
-                                      if (string == null ||
-                                          string.isEmpty ||
-                                          quantity == null ||
-                                          quantity <= 0) {
-                                        return "Enter a valid quantity";
-                                      } else {
-                                        return null;
-                                      }
-                                    },
-                                  ),
-                                  OwnersChip(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Owners",
-                                    ownerSelectionMap: _ownerSelection,
-                                    onSelected: (owner, selected) {
-                                      setState(() {
-                                        _ownerSelection[owner] = selected;
-                                      });
-                                    },
-                                    onDeleted: (owner) {
-                                      setState(() {
-                                        _ownerSelection.remove(owner);
-                                      });
-                                    },
-                                    onNew: (owner) {
-                                      setState(() {
-                                        _ownerSelection[owner] = true;
-                                      });
-                                      context
-                                          .read<ItemsViewCubit>()
-                                          .addNewOwner(owner: owner);
-                                    },
-                                  ),
-                                  ItemInfoTextFormField(
-                                    readOnly: state is! ItemsViewEdit,
-                                    label: "Notes",
-                                    initialValue:
-                                        item?.extraNotes?.toString() ??
-                                            ((state is ItemsViewEdit)
-                                                ? ""
-                                                : "<Blank>"),
-                                    controller: _notesController,
-                                  ),
-                                  SizedBox(
-                                    height: 8,
-                                  ),
-                                  Visibility(
-                                    visible: state is ItemsViewEdit,
-                                    child: ListTile(
-                                      title: Text("Can contain items"),
-                                      trailing: Switch(
-                                        value: _canContainItems,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _canContainItems = value;
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              ItemInfoExpansion(
+                                item: item,
+                                state: state,
+                                formKey: _formKey,
+                                nameController: _nameController,
+                                priceController: _priceController,
+                                quantityController: _quantityController,
+                                notesController: _notesController,
+                                canContainItems: _canContainItems,
+                                ownerSelection: _ownerSelection,
+                                isReadOnly: state is! ItemsViewEdit,
+                                onItemTypeChange: (canContainItems) {
+                                  setState(() {
+                                    _canContainItems = canContainItems;
+                                  });
+                                },
+                                onSelectOwner: (owner, selected) {
+                                  setState(() {
+                                    _ownerSelection[owner] = selected;
+                                  });
+                                },
+                                onDeleteOwner: (owner) {
+                                  setState(() {
+                                    _ownerSelection.remove(owner);
+                                  });
+                                },
+                                onNewOwner: (owner) {
+                                  setState(() {
+                                    _ownerSelection[owner] = true;
+                                  });
+                                  context
+                                      .read<ItemsViewCubit>()
+                                      .addNewOwner(owner: owner);
+                                },
+                                onAddImageTap: () async {
+                                  final images = await getImages();
+                                  if (images != null && context.mounted) {
+                                    await context
+                                        .read<ItemsViewCubit>()
+                                        .addImage(
+                                          imagesToAdd: images,
+                                        );
+                                  }
+                                },
                               ),
                             ],
                         },
@@ -286,17 +266,8 @@ class _ItemsViewState extends State<ItemsView> {
                               ListHeading("Contains"),
                               ...children.map(
                                 (item) {
-                                  return ListTile(
-                                    title: Text(item.name),
-                                    trailing: Icon(Icons.arrow_forward),
-                                    onTap: () {
-                                      context
-                                          .read<ItemsViewCubit>()
-                                          .goToItemWithId(
-                                            id: item.id,
-                                            straightToEditMode: false,
-                                          );
-                                    },
+                                  return ChildItem(
+                                    item: item,
                                   );
                                 },
                               ),
@@ -330,12 +301,13 @@ class _ItemsViewState extends State<ItemsView> {
               case ItemsViewEdit(
                   :final parentId,
                   :final editingItem,
+                  :final newImages,
                 ):
                 return FloatingActionButton.extended(
                   onPressed: () async {
                     if (_formKey.currentState!.validate()) {
                       final newItem = NewItem(
-                        editingId: editingItem?.id,
+                        editingItem: editingItem,
                         parentId: parentId,
                         name: _nameController.text,
                         price: BigInt.tryParse(_priceController.text),
@@ -354,10 +326,13 @@ class _ItemsViewState extends State<ItemsView> {
                             ? ItemType.internal
                             : ItemType.leaf,
                       );
-                      await context.read<ItemsViewCubit>().saveItem(
-                            newItem: newItem,
-                            oldItem: editingItem,
-                          );
+
+                      if (context.mounted) {
+                        await context.read<ItemsViewCubit>().saveItem(
+                              newItem: newItem,
+                              images: newImages,
+                            );
+                      }
                     }
                   },
                   icon: Icon(Icons.save),

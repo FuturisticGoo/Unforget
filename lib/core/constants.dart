@@ -1,4 +1,5 @@
-const dbFileName = "things_map.sqlite";
+const appDataFolderName = "unforget_data";
+const dbFileName = "unforget.sqlite";
 
 const appVersion = "0.1.0";
 
