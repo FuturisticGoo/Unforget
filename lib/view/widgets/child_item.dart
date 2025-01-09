@@ -7,7 +7,9 @@ import 'package:things_map/cubit/items_view_cubit.dart';
 
 class ChildItem extends StatelessWidget {
   final NonRoot item;
+  final BuildContext scaffoldContext;
   const ChildItem({
+    required this.scaffoldContext,
     super.key,
     required this.item,
   });
@@ -47,32 +49,36 @@ class ChildItem extends StatelessWidget {
                       IconButton(
                         onPressed: () async {
                           final latestState =
-                              context.read<ItemsViewCubit>().state;
+                              scaffoldContext.read<ItemsViewCubit>().state;
                           switch (latestState) {
                             case ItemsViewNonTopLevel(:final currentItem)
                                 when currentItem.id != item.id:
-                              await context.read<ItemsViewCubit>().saveItem(
+                              await scaffoldContext
+                                  .read<ItemsViewCubit>()
+                                  .saveItem(
                                     newItem: NewItem.fromNonRoot(
                                       item: item,
                                       parentId: currentItem.id,
                                     ),
                                   );
-                              if (context.mounted) {
+                              if (scaffoldContext.mounted) {
                                 ScaffoldMessenger.of(
-                                  context,
+                                  scaffoldContext,
                                 ).clearSnackBars();
                               }
 
                             case ItemsViewTopLevel():
-                              await context.read<ItemsViewCubit>().saveItem(
+                              await scaffoldContext
+                                  .read<ItemsViewCubit>()
+                                  .saveItem(
                                     newItem: NewItem.fromNonRoot(
                                       item: item,
                                       parentId: rootId,
                                     ),
                                   );
-                              if (context.mounted) {
+                              if (scaffoldContext.mounted) {
                                 ScaffoldMessenger.of(
-                                  context,
+                                  scaffoldContext,
                                 ).clearSnackBars();
                               }
                             default:
@@ -91,7 +97,7 @@ class ChildItem extends StatelessWidget {
                   ),
                   duration: Duration(days: 365),
                 );
-                ScaffoldMessenger.of(context).showSnackBar(snack);
+                ScaffoldMessenger.of(scaffoldContext).showSnackBar(snack);
               },
               child: Row(
                 children: [
@@ -107,10 +113,10 @@ class ChildItem extends StatelessWidget {
               onTap: () async {
                 if (context.mounted) {
                   ScaffoldMessenger.of(
-                    context,
+                    scaffoldContext,
                   ).clearSnackBars();
                 }
-                await context.read<ItemsViewCubit>().deleteItem(
+                await scaffoldContext.read<ItemsViewCubit>().deleteItem(
                       item: item,
                     );
               },

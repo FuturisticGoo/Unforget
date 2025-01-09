@@ -267,6 +267,7 @@ class _ItemsViewState extends State<ItemsView> {
                               ...children.map(
                                 (item) {
                                   return ChildItem(
+                                    scaffoldContext: context,
                                     item: item,
                                   );
                                 },
@@ -286,7 +287,11 @@ class _ItemsViewState extends State<ItemsView> {
                                 ),
                               )
                             ],
-                          _ => []
+                          _ => [
+                              SizedBox(
+                                height: 300,
+                              )
+                            ]
                         },
                       ],
                     ),
