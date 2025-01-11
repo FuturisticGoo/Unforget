@@ -281,7 +281,8 @@ class ItemsViewCubit extends Cubit<ItemsViewState> {
                 ) ??
                 "",
             editingItem: editingItem,
-            currentItemImagePaths: currentItemImagePaths,
+            currentItemImagePaths:
+                editingItem == null ? [] : currentItemImagePaths,
           ),
         );
       default:

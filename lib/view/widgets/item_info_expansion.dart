@@ -17,7 +17,7 @@ class ItemInfoExpansion extends StatefulWidget {
   final void Function(Owner owner, bool selected) onSelectOwner;
   final void Function(Owner owner) onDeleteOwner;
   final void Function(Owner owner) onNewOwner;
-  final void Function() onAddImageTap;
+  final void Function(bool useCamera) onAddImageTap;
   final Map<Owner, bool> ownerSelection;
   final GlobalKey<FormState> formKey;
   final bool isReadOnly;

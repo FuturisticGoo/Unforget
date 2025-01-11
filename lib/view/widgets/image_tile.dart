@@ -5,7 +5,7 @@ class ImageTile extends StatelessWidget {
   final bool isReadOnly;
   final List<String> imagePaths;
   final void Function(int index) onImageTap;
-  final void Function() onAddImageTap;
+  final void Function(bool useCamera) onAddImageTap;
   const ImageTile({
     super.key,
     required this.isReadOnly,
@@ -19,8 +19,10 @@ class ImageTile extends StatelessWidget {
     return CarouselView(
       itemExtent: double.infinity,
       onTap: (value) {
-        if (value == imagePaths.length) {
-          onAddImageTap();
+        if (value == imagePaths.length + 1) {
+          onAddImageTap(false);
+        } else if (value == imagePaths.length) {
+          onAddImageTap(true);
         } else {
           onImageTap(value);
         }
@@ -35,7 +37,10 @@ class ImageTile extends StatelessWidget {
             ? []
             : [
                 Center(
-                  child: Text("Add image"),
+                  child: Text("Capture image"),
+                ),
+                Center(
+                  child: Text("Pick image"),
                 ),
               ]
       ],
