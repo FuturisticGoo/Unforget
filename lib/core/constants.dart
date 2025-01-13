@@ -1,7 +1,7 @@
 const appDataFolderName = "unforget_data";
 const dbFileName = "unforget.sqlite";
 
-const appVersion = "0.1.0";
+const appVersion = "0.1.1";
 
 final rootId = 0;
 
